@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Upload, Edit, Trash, Eye } from 'lucide-react';
+import { Plus, Search, Upload, Edit, Trash, Eye, QrCode } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import ProductQRModal from '../ProductQRModal';
 
 interface InventoryTabProps {
     isAddingProduct: boolean;
@@ -34,8 +35,10 @@ export default function InventoryTab({
     handleEditProduct, handleDeleteProduct
 }: InventoryTabProps) {
     const navigate = useNavigate();
+    const [qrProduct, setQrProduct] = useState<any | null>(null);
 
     return (
+        <>
         <motion.div key="inventory" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="bg-card rounded-[2.5rem] border shadow-sm overflow-hidden text-sm">
             {/* Header */}
             <div className="p-8 border-b bg-secondary/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -182,6 +185,7 @@ export default function InventoryTab({
                                         <td className="p-6 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => navigate(`/product/${p.short_tag}`)} title="View Customer Product Page"><Eye size={14} /></Button>
+                                                <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg text-accent hover:bg-accent/10 border-accent/20" onClick={() => setQrProduct(p)} title="Print QR Label"><QrCode size={14} /></Button>
                                                 <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => handleEditProduct(p)} title="Edit Product"><Edit size={14} /></Button>
                                                 <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20" onClick={() => handleDeleteProduct(p.id)} title="Delete Product"><Trash size={14} /></Button>
                                             </div>
@@ -193,5 +197,8 @@ export default function InventoryTab({
                 </div>
             )}
         </motion.div>
+            {/* QR Label Print Modal */}
+            <ProductQRModal product={qrProduct} onClose={() => setQrProduct(null)} />
+        </>
     );
 }
