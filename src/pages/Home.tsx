@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { products as mockProducts, shops as mockShops, categories as mockCategories } from '../data/mockData';
-import { supabase } from '../lib/supabase';
-import ProductCard from '../components/ProductCard';
-import ShopCard from '../components/ShopCard';
+import { productsApi, ProductCard } from '../features/products';
+import { shopApi, ShopCard }        from '../features/shop';
 import { ChevronRight, ArrowRight, MapPin, Search } from 'lucide-react';
 import { motion, type Variants } from 'framer-motion';
 import { Button } from '../components/ui/button';
@@ -26,40 +25,16 @@ export default function Home() {
 
     useEffect(() => {
         const fetchHomeData = async () => {
-            const [{ data: cats }, { data: shps }, { data: prods }] = await Promise.all([
-                supabase.from('categories').select('*').limit(10),
-                supabase.from('shops').select('*').limit(6), // omitting is_verified for broader initial testing
-                supabase.from('products').select('*, shop:shops(name, lat, lng), category:categories(name)').order('created_at', { ascending: false }).limit(8)
+            const { supabase } = await import('../lib/supabase');
+            const [shops, prods, { data: categories }] = await Promise.all([
+                shopApi.getFeaturedShops(6),
+                productsApi.getFeaturedProducts(8),
+                supabase.from('categories').select('*').limit(10)
             ]);
 
-            if (cats && cats.length > 0) setLiveCategories(cats);
-            if (shps && shps.length > 0) {
-                 const mappedShops = shps.map(s => ({
-                     id: s.id,
-                     name: s.name,
-                     categories: ['Electronics', 'Accessories'], // Placeholder mapped
-                     rating: s.rating || 5.0,
-                     reviews: s.reviews_count || 0,
-                     distance: '1.2 km', // Placeholder until location is active
-                     image: s.image_url || 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?q=80&w=200&auto=format&fit=crop'
-                 }));
-                 setLiveShops(mappedShops);
-            }
-            if (prods && prods.length > 0) {
-                const mappedProds = prods.map(p => ({
-                    id: p.short_tag || p.id,
-                    name: p.name,
-                    brand: p.category?.name || 'Local',
-                    image: p.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80',
-                    price: p.price,
-                    mrp: p.original_price || p.price * 1.2,
-                    rating: 4.8,
-                    shopName: p.shop?.name || 'Partner Store',
-                    distance: '2.5 km', // Placeholder
-                    shopId: p.shop_id
-                }));
-                setLiveProducts(mappedProds);
-            }
+            if (categories && categories.length > 0) setLiveCategories(categories);
+            if (shops && shops.length > 0) setLiveShops(shops);
+            if (prods && prods.length > 0) setLiveProducts(prods);
         };
         fetchHomeData();
     }, []);

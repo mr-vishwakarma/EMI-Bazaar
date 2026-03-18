@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MapPin, Star, BadgeCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { calculateDistance } from '../lib/utils';
+import { calculateDistance } from '../../../lib/utils';
 
 export default function ShopCard({ shop }: { shop: any }) {
     // Simulated User Location (Central Bangalore)

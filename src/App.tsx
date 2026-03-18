@@ -10,13 +10,13 @@ import Checkout from './pages/Checkout';
 import VendorDashboard from './pages/VendorDashboard';
 import VendorOnboarding from './pages/VendorOnboarding';
 import AdminDashboard from './pages/AdminDashboard';
-import Auth from './pages/Auth';
+import Auth from './features/auth/components/AuthPage';
 import Profile from './pages/Profile';
-import ProtectedRoute from './components/ProtectedRoute';
+import ProtectedRoute from './features/auth/components/ProtectedRoute';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Button } from './components/ui/button';
-import { useAuthStore } from './store/authStore';
+import { useAuthStore } from './features/auth/stores/authStore';
 import { supabase } from './lib/supabase';
 import { Toaster } from 'sonner';
 

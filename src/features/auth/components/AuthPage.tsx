@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Store, Phone, ShieldCheck, ArrowRight, MessageSquare, Building2, ShieldAlert } from 'lucide-react';
-import { Button } from '../components/ui/button';
+import { Button } from '../../../components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
-import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
+import { supabase } from '../../../lib/supabase';
 import { toast } from 'sonner';
 
 export default function Auth() {

@@ -5,6 +5,7 @@ import { ShieldCheck, MapPin, Calculator, Store, Zap, CreditCard } from 'lucide-
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../components/ui/button';
 import { supabase } from '../lib/supabase';
+import { productsApi } from '../features/products';
 
 export default function ProductDetail() {
     const { id } = useParams();
@@ -18,32 +19,9 @@ export default function ProductDetail() {
             if (!id) return;
             setIsLoading(true);
             
-            // Check if ID is a UUID to prevent Postgres type errors for old mock '1', '2' tags
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-            
-            let query = supabase.from('products').select('*, shop:shops(name, lat, lng), category:categories(name)');
-            if (isUuid) {
-                 query = query.eq('id', id);
-            } else {
-                 query = query.eq('short_tag', id);
-            }
-            
-            const { data, error } = await query.single();
-            if (data && !error) {
-                setLiveProduct({
-                    id: data.id,
-                    name: data.name,
-                    brand: data.category?.name || 'Authorized Store',
-                    image: data.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=100',
-                    price: data.price,
-                    mrp: data.original_price || data.price * 1.2,
-                    rating: 4.8,
-                    shopName: data.shop?.name || 'EMI Partner',
-                    distance: '2.5 km', // Placeholder until location feature
-                    shopId: data.shop_id,
-                    description: data.description || 'No detailed description available.',
-                    imageGallery: data.image_gallery || []
-                });
+            const data = await productsApi.getProductById(id);
+            if (data) {
+                setLiveProduct(data);
             }
             setIsLoading(false);
         };
