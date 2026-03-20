@@ -13,6 +13,7 @@ export interface Product {
     distance: string;
     shopId: string;
     description: string;
+    emiPlans?: any[];
 }
 
 export const productsApi = {
@@ -36,7 +37,8 @@ export const productsApi = {
             shopName: p.shop?.name || 'Partner Store',
             distance: '2.5 km',
             shopId: p.shop_id,
-            description: p.description || ''
+            description: p.description || '',
+            emiPlans: p.emi_plans || []
         }));
     },
     
@@ -61,7 +63,8 @@ export const productsApi = {
             shopName: shopName,
             distance: '2.5 km',
             shopId: p.shop_id,
-            description: p.description || ''
+            description: p.description || '',
+            emiPlans: p.emi_plans || []
         }));
     },
 
@@ -90,7 +93,8 @@ export const productsApi = {
             shopName: data.shop?.name || 'EMI Partner',
             distance: '2.5 km', 
             shopId: data.shop_id,
-            description: data.description || 'No detailed description available.'
+            description: data.description || 'No detailed description available.',
+            emiPlans: data.emi_plans || []
         };
     }
 };

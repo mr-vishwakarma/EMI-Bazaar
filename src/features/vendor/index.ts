@@ -5,3 +5,5 @@ export { default as OrdersTab }      from './components/tabs/OrdersTab';
 export { default as PosTab }         from './components/tabs/PosTab';
 export { default as CustomersTab }   from './components/tabs/CustomersTab';
 export { default as ShopProfileTab } from './components/tabs/ShopProfileTab';
+export { default as TermsTab }       from './components/tabs/TermsTab';
+export { default as CollectionsTab } from './components/tabs/CollectionsTab';

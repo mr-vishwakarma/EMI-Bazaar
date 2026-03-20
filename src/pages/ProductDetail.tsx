@@ -29,7 +29,29 @@ export default function ProductDetail() {
     }, [id]);
 
     const product = liveProduct || mockProducts.find(p => p.id === id) || mockProducts[0];
-    const emiPlans = getEmiPlans(product?.price || 10000);
+    
+    // Convert product's dynamic EMI plans or fallback to defaults
+    const emiPlans = product?.emiPlans && product.emiPlans.length > 0
+        ? product.emiPlans.map((plan: any) => {
+            const principal = product.price;
+            // Simplified interest calculation for display
+            const interestDivisor = plan.type === 'weekly' ? 5200 : 1200;
+            const totalInterest = (principal * plan.interestRate * plan.duration) / interestDivisor; 
+            const totalAmount = principal + totalInterest;
+            const emi = totalAmount / plan.duration;
+            return {
+                id: plan.id,
+                duration: plan.duration,
+                type: plan.type,
+                rate: plan.interestRate || 0,
+                emi: Math.round(emi),
+                name: `${plan.duration} ${plan.type === 'weekly' ? 'Weeks' : 'Months'} Plan`
+            };
+        })
+        : getEmiPlans(product?.price || 10000).map((p: any) => ({
+            id: p.months.toString(), duration: p.months, type: 'monthly', rate: p.rate, emi: p.emi, name: p.name
+        }));
+
     const productImages = product?.imageGallery && product.imageGallery.length > 0 ? product.imageGallery : [product.image];
 
     if (isLoading) {
@@ -163,7 +185,7 @@ export default function ProductDetail() {
                         </h3>
 
                         <div className="grid grid-cols-2 gap-4">
-                            {emiPlans.map((plan, idx) => (
+                            {emiPlans.map((plan: any, idx: number) => (
                                 <motion.div
                                     key={idx}
                                     whileHover={{ scale: 1.02, y: -2 }}
@@ -177,11 +199,11 @@ export default function ProductDetail() {
                                     <div className="flex justify-between items-start mb-2">
                                         <span className={`text-xs font-black px-2 py-1 rounded-md uppercase tracking-wide ${selectedPlan === idx ? 'bg-accent text-white' : 'bg-secondary text-muted-foreground'
                                             }`}>
-                                            {plan.months} Mo
+                                            {plan.duration} {plan.type === 'weekly' ? 'Wk' : 'Mo'}
                                         </span>
                                         {plan.rate === 0 && <span className="text-[10px] font-bold text-accent px-2 py-1 bg-accent/10 rounded border border-accent/20">NO COST</span>}
                                     </div>
-                                    <div className="text-2xl font-black tracking-tight mt-3">₹{plan.emi.toLocaleString('en-IN')}</div>
+                                    <div className="text-2xl font-black tracking-tight mt-3">₹{plan.emi.toLocaleString('en-IN')}<span className="text-xs text-muted-foreground font-semibold">/{plan.type === 'weekly' ? 'wk' : 'mo'}</span></div>
                                     <div className="text-sm font-medium text-muted-foreground mt-1">{plan.name} at {plan.rate}% pa</div>
 
                                     {selectedPlan === idx && (

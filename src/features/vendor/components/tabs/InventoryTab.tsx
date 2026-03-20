@@ -10,7 +10,7 @@ interface InventoryTabProps {
     setIsAddingProduct: (v: boolean) => void;
     editingProductId: string | null;
     setEditingProductId: (id: string | null) => void;
-    newProduct: { name: string; price: string; mrp: string; stock: string; description: string };
+    newProduct: { name: string; price: string; mrp: string; stock: string; description: string; emiPlans: any[] };
     setNewProduct: (p: any) => void;
     selectedCategory: string;
     setSelectedCategory: (c: string) => void;
@@ -125,12 +125,95 @@ export default function InventoryTab({
                             <input type="number" value={newProduct.stock} onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })} className="w-full bg-secondary border border-transparent focus:border-accent rounded-xl px-4 py-3 outline-none font-medium text-base" placeholder="10" />
                         </div>
                     </div>
-                    <div className="space-y-2">
+
+                    {/* EMI Configuration Section */}
+                    <div className="bg-accent/5 border border-accent/20 rounded-2xl p-6 mt-6 space-y-4">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center font-bold">
+                                %
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-base text-card-foreground">EMI Plan Configuration</h3>
+                                <p className="text-xs text-muted-foreground">Set customer installment rules for this product.</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {newProduct.emiPlans.map((plan, idx) => (
+                                <div key={plan.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-card p-4 rounded-xl border border-secondary">
+                                    <div className="md:col-span-3 space-y-2">
+                                        <label className="font-bold text-xs uppercase text-muted-foreground">Payment Cycle</label>
+                                        <select 
+                                            value={plan.type} 
+                                            onChange={e => {
+                                                const newPlans = [...newProduct.emiPlans];
+                                                newPlans[idx].type = e.target.value;
+                                                setNewProduct({ ...newProduct, emiPlans: newPlans });
+                                            }}
+                                            className="w-full bg-secondary border border-transparent focus:border-accent rounded-xl px-4 py-3 outline-none font-medium text-sm appearance-none cursor-pointer"
+                                        >
+                                            <option value="monthly">Monthly</option>
+                                            <option value="weekly">Weekly</option>
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-4 space-y-2">
+                                        <label className="font-bold text-xs uppercase text-muted-foreground">Duration ({plan.type === 'weekly' ? 'Weeks' : 'Months'})</label>
+                                        <input 
+                                            type="number" min="1" max="60" value={plan.duration} 
+                                            onChange={e => {
+                                                const newPlans = [...newProduct.emiPlans];
+                                                newPlans[idx].duration = Number(e.target.value);
+                                                setNewProduct({ ...newProduct, emiPlans: newPlans });
+                                            }}
+                                            className="w-full bg-secondary border border-transparent focus:border-accent rounded-xl px-4 py-3 outline-none font-medium text-sm" 
+                                            placeholder={plan.type === 'weekly' ? "e.g., 12" : "e.g., 6"} 
+                                        />
+                                    </div>
+                                    <div className="md:col-span-4 space-y-2">
+                                        <label className="font-bold text-xs uppercase text-muted-foreground">Interest Rate (%)</label>
+                                        <input 
+                                            type="number" min="0" max="36" step="0.1" value={plan.interestRate} 
+                                            onChange={e => {
+                                                const newPlans = [...newProduct.emiPlans];
+                                                newPlans[idx].interestRate = Number(e.target.value);
+                                                setNewProduct({ ...newProduct, emiPlans: newPlans });
+                                            }}
+                                            className="w-full bg-secondary border border-transparent focus:border-accent rounded-xl px-4 py-3 outline-none font-medium text-sm" 
+                                            placeholder="0 = No Cost" 
+                                        />
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <button 
+                                            onClick={() => {
+                                                if (newProduct.emiPlans.length === 1) return;
+                                                const newPlans = newProduct.emiPlans.filter((_, i) => i !== idx);
+                                                setNewProduct({ ...newProduct, emiPlans: newPlans });
+                                            }}
+                                            disabled={newProduct.emiPlans.length === 1}
+                                            className={`w-full h-11 flex items-center justify-center rounded-xl bg-red-500/10 text-red-500 transition-opacity ${newProduct.emiPlans.length === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500/20'}`}
+                                        >
+                                            <Trash size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            <Button 
+                                variant="outline" 
+                                onClick={() => setNewProduct({ ...newProduct, emiPlans: [...newProduct.emiPlans, { id: crypto.randomUUID(), type: 'monthly', duration: 12, interestRate: 10 }] })}
+                                className="w-full border-dashed border-2 bg-transparent hover:bg-secondary/50 rounded-xl flex items-center gap-2 h-12"
+                            >
+                                <Plus size={16} className="text-muted-foreground" />
+                                <span className="font-bold text-muted-foreground">Add Another EMI Plan</span>
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 mt-6">
                         <label className="font-bold text-xs uppercase text-muted-foreground">Description</label>
                         <textarea value={newProduct.description} onChange={e => setNewProduct({ ...newProduct, description: e.target.value })} className="w-full bg-secondary border border-transparent focus:border-accent rounded-xl px-4 py-3 outline-none font-medium text-base resize-none h-24" placeholder="Features, specifications..." />
                     </div>
                     <div className="flex justify-end gap-3 pt-4 border-t border-secondary">
-                        <Button variant="outline" onClick={() => { setIsAddingProduct(false); setEditingProductId(null); setNewProduct({ name: '', price: '', mrp: '', stock: '', description: '' }); }} disabled={isSavingProduct} className="rounded-xl font-bold px-6">Cancel</Button>
+                        <Button variant="outline" onClick={() => { setIsAddingProduct(false); setEditingProductId(null); setNewProduct({ name: '', price: '', mrp: '', stock: '', description: '', emiPlans: [{ id: crypto.randomUUID(), type: 'monthly', duration: 6, interestRate: 0 }] }); }} disabled={isSavingProduct} className="rounded-xl font-bold px-6">Cancel</Button>
                         <Button variant="accent" onClick={submitNewProduct} disabled={isSavingProduct} className="rounded-xl shadow-lg shadow-accent/20 font-bold px-8">
                             {isSavingProduct ? 'Saving...' : (editingProductId ? 'Update Product' : 'Save Catalog')}
                         </Button>

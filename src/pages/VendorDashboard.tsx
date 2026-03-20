@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Plus, Box, CreditCard, LayoutDashboard, Users,
     ShoppingBag, Store, CheckCircle2, Lock,
-    TrendingUp, AlertCircle, Trash, Clock
+    TrendingUp, AlertCircle, Trash, Clock, BookOpen, Banknote
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../components/ui/button';
@@ -14,8 +14,8 @@ import { toast } from 'sonner';
 
 // Feature tabs
 import {
-    AnalyticsTab, InventoryTab, OrdersTab,
-    PosTab, CustomersTab, ShopProfileTab
+    AnalyticsTab, InventoryTab, OrdersTab, CollectionsTab,
+    PosTab, CustomersTab, ShopProfileTab, TermsTab
 } from '../features/vendor';
 
 export default function VendorDashboard() {
@@ -76,11 +76,6 @@ export default function VendorDashboard() {
     };
 
     // ─── Mock Data ───────────────────────────────────────────────
-    const mockOrders = [
-        { id: 'ORD-1092', customer: 'Rahul Sharma',  product: 'iPhone 15 Pro',   amount: '₹1,34,900', status: 'Pending',   type: 'Walk-in EMI',     date: 'Just now'   },
-        { id: 'ORD-1091', customer: 'Priya Patel',   product: 'Sony 4K TV',       amount: '₹65,000',   status: 'Completed', type: 'Online Delivery', date: '2 hours ago' },
-        { id: 'ORD-1090', customer: 'Amit Kumar',    product: 'MacBook Air M2',   amount: '₹1,14,900', status: 'Completed', type: 'Store Pickup',    date: 'Yesterday'  },
-    ];
     const mockCustomers = [
         { id: 'CUST-001', name: 'Rahul Sharma', phone: '+91 98765 43210', activeEmis: 1, totalSpent: '₹1,34,900', status: 'Good Standing' },
         { id: 'CUST-002', name: 'Amit Kumar',   phone: '+91 91234 56789', activeEmis: 0, totalSpent: '₹45,000',   status: 'Paid Off'     },
@@ -91,7 +86,7 @@ export default function VendorDashboard() {
     const [myProducts, setMyProducts] = useState<any[]>([]);
     const [fetchingProducts, setFetchingProducts] = useState(false);
     const [isAddingProduct, setIsAddingProduct] = useState(false);
-    const [newProduct, setNewProduct] = useState({ name: '', price: '', mrp: '', stock: '', description: '' });
+    const [newProduct, setNewProduct] = useState({ name: '', price: '', mrp: '', stock: '', description: '', emiPlans: [{ id: crypto.randomUUID(), type: 'monthly', duration: 6, interestRate: 0 }] });
     const [selectedCategory, setSelectedCategory] = useState('');
     const [dbCategories, setDbCategories] = useState<any[]>([]);
     const [productImageFiles, setProductImageFiles] = useState<File[]>([]);
@@ -103,7 +98,7 @@ export default function VendorDashboard() {
 
     const handleEditProduct = (p: any) => {
         setEditingProductId(p.id);
-        setNewProduct({ name: p.name || '', price: p.price?.toString() || '', mrp: p.original_price?.toString() || '', stock: p.stock_count?.toString() || '0', description: p.description || '' });
+        setNewProduct({ name: p.name || '', price: p.price?.toString() || '', mrp: p.original_price?.toString() || '', stock: p.stock_count?.toString() || '0', description: p.description || '', emiPlans: Array.isArray(p.emi_plans) && p.emi_plans.length > 0 ? p.emi_plans : [{ id: crypto.randomUUID(), type: 'monthly', duration: 6, interestRate: 0 }] });
         setSelectedCategory(p.category?.name || '');
         setProductImageFiles([]);
         setIsAddingProduct(true);
@@ -187,15 +182,15 @@ export default function VendorDashboard() {
         const shortTag = 'PROD-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
         if (editingProductId) {
-            const updatePayload: any = { category_id: finalCategoryId, name: newProduct.name, price: Number(newProduct.price), original_price: Number(newProduct.mrp) || null, stock_count: Number(newProduct.stock) || 0, description: newProduct.description };
+            const updatePayload: any = { category_id: finalCategoryId, name: newProduct.name, price: Number(newProduct.price), original_price: Number(newProduct.mrp) || null, stock_count: Number(newProduct.stock) || 0, description: newProduct.description, emi_plans: newProduct.emiPlans };
             if (productImageFiles.length > 0) { updatePayload.image_url = finalImageUrl; updatePayload.image_gallery = imageGallery; }
             const { error } = await supabase.from('products').update(updatePayload).eq('id', editingProductId);
             if (error) { toast.error("Failed to update product: " + error.message); }
-            else { toast.success("Product updated successfully!"); setIsAddingProduct(false); setEditingProductId(null); setNewProduct({ name: '', price: '', mrp: '', stock: '', description: '' }); setProductImageFiles([]); fetchMyProducts(); }
+            else { toast.success("Product updated successfully!"); setIsAddingProduct(false); setEditingProductId(null); setNewProduct({ name: '', price: '', mrp: '', stock: '', description: '', emiPlans: [{ id: crypto.randomUUID(), type: 'monthly', duration: 6, interestRate: 0 }] }); setProductImageFiles([]); fetchMyProducts(); }
         } else {
-            const { error } = await supabase.from('products').insert({ shop_id: shop.id, category_id: finalCategoryId, name: newProduct.name, price: Number(newProduct.price), original_price: Number(newProduct.mrp) || null, stock_count: Number(newProduct.stock) || 0, description: newProduct.description, short_tag: shortTag, image_url: finalImageUrl, image_gallery: imageGallery });
+            const { error } = await supabase.from('products').insert({ shop_id: shop.id, category_id: finalCategoryId, name: newProduct.name, price: Number(newProduct.price), original_price: Number(newProduct.mrp) || null, stock_count: Number(newProduct.stock) || 0, description: newProduct.description, short_tag: shortTag, image_url: finalImageUrl, image_gallery: imageGallery, emi_plans: newProduct.emiPlans });
             if (error) { toast.error("Failed to add product: " + error.message); }
-            else { toast.success("Product added successfully! Tag: " + shortTag); setIsAddingProduct(false); setNewProduct({ name: '', price: '', mrp: '', stock: '', description: '' }); setProductImageFiles([]); fetchMyProducts(); }
+            else { toast.success("Product added successfully! Tag: " + shortTag); setIsAddingProduct(false); setNewProduct({ name: '', price: '', mrp: '', stock: '', description: '', emiPlans: [{ id: crypto.randomUUID(), type: 'monthly', duration: 6, interestRate: 0 }] }); setProductImageFiles([]); fetchMyProducts(); }
         }
         setIsSavingProduct(false);
     };
@@ -204,8 +199,10 @@ export default function VendorDashboard() {
         { id: 'analytics',    icon: LayoutDashboard, label: 'Analytics' },
         { id: 'inventory',    icon: Box,             label: 'Products & Stock' },
         { id: 'orders',       icon: ShoppingBag,     label: 'Manage Orders' },
+        { id: 'collections',  icon: Banknote,        label: 'Collections' },
         { id: 'pos',          icon: CreditCard,      label: 'Walk-in EMI (POS)' },
         { id: 'customers',    icon: Users,           label: 'Customers' },
+        { id: 'terms',        icon: BookOpen,        label: 'Terms & Rules' },
         { id: 'registration', icon: Store,           label: 'Shop Profile' }
     ];
 
@@ -394,7 +391,8 @@ export default function VendorDashboard() {
                             handleEditProduct={handleEditProduct} handleDeleteProduct={handleDeleteProduct}
                         />
                     )}
-                    {activeTab === 'orders'       && <OrdersTab mockOrders={mockOrders} />}
+                    {activeTab === 'orders'       && <OrdersTab />}
+                    {activeTab === 'collections'  && <CollectionsTab />}
                     {activeTab === 'pos'          && (
                         <PosTab
                             posStep={posStep} setPosStep={setPosStep}
@@ -406,6 +404,7 @@ export default function VendorDashboard() {
                         />
                     )}
                     {activeTab === 'customers'    && <CustomersTab mockCustomers={mockCustomers} />}
+                    {activeTab === 'terms'        && <TermsTab />}
                     {activeTab === 'registration' && <ShopProfileTab vendorProfile={vendorProfile} />}
                 </AnimatePresence>
             </div>
