@@ -233,7 +233,7 @@ export default function ProductDetail() {
                     </Link>
 
                     <div className="flex flex-col sm:flex-row gap-4 mt-2">
-                        <Link to="/checkout" className="flex-1">
+                        <Link to={`/checkout?productId=${product.id}&planIndex=${selectedPlan}`} className="flex-1">
                             <Button variant="accent" size="lg" className="w-full text-lg h-14 rounded-xl shadow-xl shadow-accent/20">
                                 <CreditCard size={20} className="mr-2" /> Buy on EMI
                             </Button>

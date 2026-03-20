@@ -14,13 +14,15 @@ export interface Product {
     shopId: string;
     description: string;
     emiPlans?: any[];
+    vendorId?: string;
+    shortTag?: string;
 }
 
 export const productsApi = {
     async getFeaturedProducts(limit = 8): Promise<Product[]> {
         const { data, error } = await supabase
             .from('products')
-            .select('*, shop:shops(name, lat, lng), category:categories(name)')
+            .select('*, shop:shops(name, vendor_id, lat, lng), category:categories(name)')
             .order('created_at', { ascending: false })
             .limit(limit);
             
@@ -37,6 +39,8 @@ export const productsApi = {
             shopName: p.shop?.name || 'Partner Store',
             distance: '2.5 km',
             shopId: p.shop_id,
+            vendorId: p.shop?.vendor_id,
+            shortTag: p.short_tag,
             description: p.description || '',
             emiPlans: p.emi_plans || []
         }));
@@ -63,13 +67,15 @@ export const productsApi = {
             shopName: shopName,
             distance: '2.5 km',
             shopId: p.shop_id,
+            vendorId: p.shop?.vendor_id,
+            shortTag: p.short_tag,
             description: p.description || '',
             emiPlans: p.emi_plans || []
         }));
     },
 
     async getProductById(id: string): Promise<Product | null> {
-        let query = supabase.from('products').select('*, shop:shops(name, lat, lng), category:categories(name)');
+        let query = supabase.from('products').select('*, shop:shops(name, vendor_id, lat, lng), category:categories(name)');
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
         
         if (isUuid) {
@@ -93,6 +99,8 @@ export const productsApi = {
             shopName: data.shop?.name || 'EMI Partner',
             distance: '2.5 km', 
             shopId: data.shop_id,
+            vendorId: data.shop?.vendor_id,
+            shortTag: data.short_tag,
             description: data.description || 'No detailed description available.',
             emiPlans: data.emi_plans || []
         };

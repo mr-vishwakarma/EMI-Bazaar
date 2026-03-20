@@ -18,7 +18,7 @@ export default function OrdersTab() {
             .from('emi_contracts')
             .select(`
                 *,
-                product:products(name)
+                product:products(name, short_tag)
             `)
             .eq('vendor_id', user.id)
             .order('created_at', { ascending: false });
@@ -107,7 +107,8 @@ export default function OrdersTab() {
                                             {order.status === 'defaulted' && <span className="text-xs bg-red-500/10 text-red-600 px-2 py-0.5 rounded font-bold uppercase">Late</span>}
                                         </div>
                                         <p className="font-bold text-lg leading-tight">{order.product?.name || 'Unknown Product'}</p>
-                                        <p className="text-sm font-medium text-muted-foreground mt-0.5">By {order.customer?.full_name || 'Unknown Customer'} • {order.duration_count} {order.duration_type === 'monthly' ? 'Months' : 'Weeks'}</p>
+                                        <p className="text-xs font-mono font-bold text-muted-foreground bg-secondary/50 px-1.5 py-0.5 rounded w-fit mt-1">{order.product?.short_tag || 'NO-TAG'}</p>
+                                        <p className="text-sm font-medium text-muted-foreground mt-1.5">By {order.customer?.full_name || 'Unknown Customer'} • {order.duration_count} {order.duration_type === 'monthly' ? 'Months' : 'Weeks'}</p>
                                     </div>
                                 </div>
 

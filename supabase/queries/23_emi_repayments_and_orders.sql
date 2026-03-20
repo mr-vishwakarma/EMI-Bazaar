@@ -79,11 +79,6 @@ BEGIN
         p_contract_id, v_contract.customer_id, v_contract.vendor_id, p_amount, p_payment_method
     );
 
-    -- Free up customer credit limit proportionally
-    UPDATE public.customer_profiles
-    SET credit_used = GREATEST(0, credit_used - p_amount)
-    WHERE user_id = v_contract.customer_id;
-
     RETURN json_build_object('success', true, 'status', v_new_status);
 END;
 $$;

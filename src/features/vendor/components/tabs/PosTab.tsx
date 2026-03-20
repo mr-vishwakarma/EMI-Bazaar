@@ -199,11 +199,6 @@ export default function PosTab(_props: PosTabProps) {
 
             if (error) throw error;
 
-            // Update customer credit_used
-            const currentUsed = customer.credit_used || 0;
-            await supabase.from('customer_profiles')
-                .upsert({ user_id: customerId, credit_used: currentUsed + totalAmount }, { onConflict: 'user_id' });
-
             setCreatedContract(contract);
             setStep(7);
             toast.success('EMI Contract created successfully! 🎉');

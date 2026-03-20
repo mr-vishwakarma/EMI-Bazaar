@@ -42,7 +42,7 @@ export default function CollectionsTab() {
             .from('customer_profiles')
             .select('user_id, full_name, phone')
             .in('user_id', allCustomerIds);
-            
+
         const { data: userData } = await supabase
             .from('users')
             .select('id, full_name, phone')
@@ -63,7 +63,7 @@ export default function CollectionsTab() {
         if (acts) {
             setContracts(acts.map(a => ({ ...a, customer: getCustomerInfo(a.customer_id) })));
         }
-        
+
         setLoading(false);
     };
 

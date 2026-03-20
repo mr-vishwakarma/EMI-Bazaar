@@ -47,8 +47,17 @@ export default function ProductCard({ product }: { product: any }) {
 
                     <div className="bg-secondary/40 rounded-lg p-2.5 mt-1 border border-border/50">
                         <div className="flex justify-between items-center text-xs">
-                            <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent/70">0% EMI</span>
-                            <span className="text-muted-foreground font-medium">from <span className="text-foreground font-bold">₹{Math.round(product.price / 6)}</span>/mo</span>
+                            <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent/70">
+                                {product.emiPlans && product.emiPlans[0]?.interestRate === 0 ? '0% EMI' : 'Easy EMI'}
+                            </span>
+                            <span className="text-muted-foreground font-medium">
+                                from <span className="text-foreground font-bold">
+                                    ₹{product.emiPlans?.length > 0 
+                                        ? Math.round(((product.price * (product.emiPlans[0].interestRate || 0) * product.emiPlans[0].duration) / (product.emiPlans[0].type === 'weekly' ? 5200 : 1200) + product.price) / product.emiPlans[0].duration)
+                                        : Math.round(product.price / 6)
+                                    }
+                                </span>/{product.emiPlans?.[0]?.type === 'weekly' ? 'wk' : 'mo'}
+                            </span>
                         </div>
                     </div>
 
