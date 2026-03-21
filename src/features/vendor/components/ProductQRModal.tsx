@@ -20,8 +20,8 @@ export default function ProductQRModal({ product, onClose }: ProductQRModalProps
 
     if (!product) return null;
 
-    // The QR code encodes the short_tag — customer scans it, vendor enters it in POS
-    const qrValue = product.short_tag;
+    // The QR code encodes the full product URL for customer scanning
+    const qrValue = `${window.location.origin}/product/${product.short_tag}`;
 
     const handlePrint = () => {
         const printContent = printRef.current;

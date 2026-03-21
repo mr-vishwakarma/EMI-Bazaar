@@ -151,6 +151,12 @@ export default function PosTab(_props: PosTabProps) {
             setIsSearchingProduct(false);
             return;
         }
+        if (data.stock_count <= 0) {
+            toast.error('Product is out of stock. Please update the inventory first.');
+            setIsSearchingProduct(false);
+            return;
+        }
+
         setProduct(data);
         setIsSearchingProduct(false);
         setStep(5);
@@ -198,6 +204,20 @@ export default function PosTab(_props: PosTabProps) {
             }).select().single();
 
             if (error) throw error;
+            
+            // ─── Phase 1: Automated Inventory Sync ───
+            // Decrement stock count for the product
+            if (product.stock_count !== undefined) {
+                const { error: stockError } = await supabase
+                    .from('products')
+                    .update({ stock_count: Math.max(0, (product.stock_count || 0) - 1) })
+                    .eq('id', product.id);
+
+                if (stockError) {
+                    console.error('Failed to decrement inventory:', stockError);
+                    toast.error('Contract created but failed to update inventory count.');
+                }
+            }
 
             setCreatedContract(contract);
             setStep(7);

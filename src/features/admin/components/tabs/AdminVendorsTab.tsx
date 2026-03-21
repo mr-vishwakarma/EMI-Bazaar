@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Store, Search, Eye, ChevronDown, ChevronUp, Check, CheckCircle2,
@@ -21,7 +21,7 @@ interface AdminVendorsTabProps {
     PAGE_SIZE: number;
     fetchVendors: () => void;
     handleApprove: (userId: string) => void;
-    handleDecline: (userId: string) => void;
+    handleDecline: (userId: string, reason?: string) => void;
     handleSuspend: (userId: string) => void;
     handleMarkReviewed: (vendorProfileId: string) => void;
 }
@@ -49,8 +49,51 @@ export default function AdminVendorsTab({
     currentPage, setCurrentPage, totalVendors, PAGE_SIZE,
     fetchVendors, handleApprove, handleDecline, handleSuspend, handleMarkReviewed
 }: AdminVendorsTabProps) {
+    const [rejectingVendorId, setRejectingVendorId] = useState<string | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
+
     return (
-        <motion.div key="vendors" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="space-y-4">
+        <motion.div key="vendors" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="space-y-4 relative">
+
+            {/* Rejection Modal Overlay (Simplified inline) */}
+            <AnimatePresence>
+                {rejectingVendorId && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+                            className="bg-card border-2 shadow-2xl rounded-[2.5rem] p-8 w-full max-w-md"
+                        >
+                            <h3 className="text-xl font-black mb-2">Decline Application</h3>
+                            <p className="text-sm text-muted-foreground mb-6">Explain why this vendor is being rejected so they can fix it and re-apply.</p>
+                            
+                            <textarea
+                                value={rejectionReason}
+                                onChange={e => setRejectionReason(e.target.value)}
+                                placeholder="e.g. GST certificate is blurry, please upload a high-quality scan."
+                                className="w-full bg-secondary border-transparent focus:border-red-500 rounded-2xl p-4 text-sm font-medium h-32 outline-none transition-all resize-none mb-6"
+                                autoFocus
+                            />
+
+                            <div className="flex gap-3">
+                                <Button variant="ghost" onClick={() => { setRejectingVendorId(null); setRejectionReason(''); }} className="flex-1 rounded-xl font-bold h-12">Cancel</Button>
+                                <Button 
+                                    onClick={() => {
+                                        handleDecline(rejectingVendorId, rejectionReason);
+                                        setRejectingVendorId(null);
+                                        setRejectionReason('');
+                                    }}
+                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold h-12 shadow-lg shadow-red-500/20"
+                                >
+                                    Confirm Decline
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Header */}
             <div className="bg-card rounded-[2rem] border shadow-sm p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -145,7 +188,7 @@ export default function AdminVendorsTab({
                                             <Button size="sm" onClick={() => handleApprove(userId)} className="bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold h-8">
                                                 <Check size={13} className="mr-1" /> Approve
                                             </Button>
-                                            <Button size="sm" onClick={() => handleDecline(userId)} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl font-bold h-8">
+                                            <Button size="sm" onClick={() => setRejectingVendorId(userId)} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl font-bold h-8">
                                                 <XCircle size={13} className="mr-1" /> Decline
                                             </Button>
                                         </>
@@ -283,7 +326,7 @@ export default function AdminVendorsTab({
                                                     </p>
                                                     {status === 'pending' && (
                                                         <>
-                                                            <Button size="sm" onClick={() => handleDecline(userId)} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl font-bold">
+                                                            <Button size="sm" onClick={() => setRejectingVendorId(userId)} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl font-bold">
                                                                 <XCircle size={14} className="mr-1" /> Decline
                                                             </Button>
                                                             <Button size="sm" onClick={() => handleApprove(userId)} className="bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold">

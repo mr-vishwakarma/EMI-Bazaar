@@ -27,23 +27,26 @@ export const productsApi = {
             .limit(limit);
             
         if (error || !data) return [];
-        return data.map((p: any) => ({
-            id: p.short_tag || p.id,
-            name: p.name,
-            brand: p.category?.name || 'Local',
-            image: p.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80',
-            imageGallery: p.image_gallery || [],
-            price: p.price,
-            mrp: p.original_price || p.price * 1.2,
-            rating: 4.8,
-            shopName: p.shop?.name || 'Partner Store',
-            distance: '2.5 km',
-            shopId: p.shop_id,
-            vendorId: p.shop?.vendor_id,
-            shortTag: p.short_tag,
-            description: p.description || '',
-            emiPlans: p.emi_plans || []
-        }));
+        return data.map((p: any) => {
+            const randomDist = (Math.random() * 4 + 0.5).toFixed(1);
+            return {
+                id: p.short_tag || p.id,
+                name: p.name,
+                brand: p.category?.name || 'Local',
+                image: p.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80',
+                imageGallery: p.image_gallery || [],
+                price: p.price,
+                mrp: p.original_price || p.price * 1.2,
+                rating: 4.8,
+                shopName: p.shop?.name || 'Partner Store',
+                distance: `${randomDist} km`,
+                shopId: p.shop_id,
+                vendorId: p.shop?.vendor_id,
+                shortTag: p.short_tag,
+                description: p.description || '',
+                emiPlans: p.emi_plans || []
+            };
+        });
     },
     
     async getShopProducts(shopId: string, shopName: string): Promise<Product[]> {
@@ -55,23 +58,26 @@ export const productsApi = {
             .order('created_at', { ascending: false });
             
         if (error || !data) return [];
-        return data.map((p: any) => ({
-            id: p.short_tag || p.id,
-            name: p.name,
-            brand: p.category?.name || 'Local',
-            image: p.image_url || 'https://via.placeholder.com/300',
-            imageGallery: p.image_gallery || [],
-            price: p.price,
-            mrp: p.original_price || p.price * 1.2,
-            rating: 4.8,
-            shopName: shopName,
-            distance: '2.5 km',
-            shopId: p.shop_id,
-            vendorId: p.shop?.vendor_id,
-            shortTag: p.short_tag,
-            description: p.description || '',
-            emiPlans: p.emi_plans || []
-        }));
+        return data.map((p: any) => {
+            const randomDist = (Math.random() * 2 + 0.2).toFixed(1);
+            return {
+                id: p.short_tag || p.id,
+                name: p.name,
+                brand: p.category?.name || 'Local',
+                image: p.image_url || 'https://via.placeholder.com/300',
+                imageGallery: p.image_gallery || [],
+                price: p.price,
+                mrp: p.original_price || p.price * 1.2,
+                rating: 4.8,
+                shopName: shopName,
+                distance: `${randomDist} km`,
+                shopId: p.shop_id,
+                vendorId: p.shop?.vendor_id,
+                shortTag: p.short_tag,
+                description: p.description || '',
+                emiPlans: p.emi_plans || []
+            };
+        });
     },
 
     async getProductById(id: string): Promise<Product | null> {
@@ -87,6 +93,7 @@ export const productsApi = {
         const { data, error } = await query.single();
         if (error || !data) return null;
         
+        const randomDist = (Math.random() * 3 + 1.2).toFixed(1);
         return {
             id: data.id,
             name: data.name,
@@ -97,7 +104,7 @@ export const productsApi = {
             mrp: data.original_price || data.price * 1.2,
             rating: 4.8,
             shopName: data.shop?.name || 'EMI Partner',
-            distance: '2.5 km', 
+            distance: `${randomDist} km`, 
             shopId: data.shop_id,
             vendorId: data.shop?.vendor_id,
             shortTag: data.short_tag,

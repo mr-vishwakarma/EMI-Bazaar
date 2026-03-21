@@ -7,6 +7,7 @@ import {
     ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie 
 } from 'recharts';
 import { Button } from '../../../../components/ui/button';
+import { StatCardSkeleton, Skeleton } from '../../../../components/ui/skeleton';
 import { toast } from 'sonner';
 
 export default function AnalyticsTab() {
@@ -40,10 +41,20 @@ export default function AnalyticsTab() {
 
     if (loading && !data) {
         return (
-            <div className="flex h-96 items-center justify-center">
-                <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                    <div className="w-10 h-10 border-4 border-border border-t-accent rounded-full animate-spin" />
-                    <p className="font-semibold">Crunching business data...</p>
+            <div className="space-y-8 pb-10">
+                <div className="flex justify-between items-center">
+                    <div className="space-y-2">
+                        <Skeleton className="h-10 w-48" />
+                        <Skeleton className="h-4 w-64" />
+                    </div>
+                    <Skeleton className="h-12 w-40 rounded-2xl" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[...Array(4)].map((_, i) => <StatCardSkeleton key={i} />)}
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                    <Skeleton className="xl:col-span-2 h-[500px] rounded-[3rem]" />
+                    <Skeleton className="h-[500px] rounded-[3rem]" />
                 </div>
             </div>
         );
@@ -99,10 +110,10 @@ export default function AnalyticsTab() {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                    <h1 className="text-4xl font-black text-foreground tracking-tight flex items-center gap-3">
+                    <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight flex items-center gap-2 sm:gap-3">
                         Business <span className="text-accent">Pulse</span>
                     </h1>
-                    <p className="text-muted-foreground font-medium text-lg">Real-time performance metrics for your store.</p>
+                    <p className="text-sm sm:text-lg text-muted-foreground font-medium">Real-time performance metrics.</p>
                 </div>
                 <Button onClick={fetchAnalytics} variant="outline" className="rounded-2xl h-12 bg-card border-2 font-bold gap-2 px-6 shadow-sm hover:bg-secondary">
                     <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
@@ -118,11 +129,13 @@ export default function AnalyticsTab() {
                         animate={{ opacity: 1, y: 0 }} 
                         transition={{ delay: i * 0.1 }}
                         key={i} 
-                        className="bg-card border p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden group hover:shadow-xl hover:shadow-accent/5 transition-all duration-500"
+                        className="bg-card border p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-sm relative overflow-hidden group hover:shadow-xl hover:shadow-accent/5 transition-all duration-500"
                     >
-                        <div className={`absolute top-0 right-0 p-6 text-${s.color === 'accent' ? 'accent' : s.color + '-500'}/10 transition-transform group-hover:scale-110 duration-500`}><s.icon size={90} strokeWidth={1.5} /></div>
-                        <p className="text-muted-foreground font-bold text-xs uppercase tracking-widest mb-3">{s.label}</p>
-                        <h2 className="text-3xl font-black mb-3 relative z-10 tracking-tight">{s.value}</h2>
+                        <div className="absolute -bottom-6 -right-6 text-foreground/[0.10] transition-all group-hover:scale-110 group-hover:-rotate-3 duration-700 pointer-events-none">
+                            <s.icon size={120} strokeWidth={1.5} />
+                        </div>
+                        <p className="text-muted-foreground font-bold text-[10px] sm:text-xs uppercase tracking-widest mb-2 sm:mb-3">{s.label}</p>
+                        <h2 className="text-2xl sm:text-3xl font-black mb-2 sm:mb-3 relative z-10 tracking-tight">{s.value}</h2>
                         <p className="text-xs font-bold text-muted-foreground/60 leading-relaxed max-w-[140px]">{s.desc}</p>
                         <div className={`absolute bottom-0 left-0 h-1.5 w-full bg-${s.color === 'accent' ? 'accent' : s.color + '-500'}/10`} />
                     </motion.div>
@@ -132,15 +145,15 @@ export default function AnalyticsTab() {
             {/* Main Charts */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                 {/* Revenue Timeline */}
-                <div className="xl:col-span-2 bg-card border rounded-[3rem] p-10 shadow-sm relative">
-                    <div className="flex justify-between items-center mb-10">
-                        <div className="flex items-center gap-3">
-                            <div className="p-3 bg-accent/10 rounded-2xl text-accent">
-                                <TrendingUp size={24} />
+                <div className="xl:col-span-2 bg-card border rounded-[1.5rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-sm relative">
+                    <div className="flex justify-between items-center mb-6 sm:mb-10">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-2 sm:p-3 bg-accent/10 rounded-xl sm:rounded-2xl text-accent">
+                                <TrendingUp size={20} />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black tracking-tight">Revenue Growth</h3>
-                                <p className="text-sm text-muted-foreground font-medium">Monthly breakdown of EMI sales volume.</p>
+                                <h3 className="text-xl sm:text-2xl font-black tracking-tight">Revenue Growth</h3>
+                                <p className="text-xs sm:text-sm text-muted-foreground font-medium">Monthly breakdown.</p>
                             </div>
                         </div>
                         <div className="flex bg-secondary p-1 rounded-xl">
@@ -149,7 +162,7 @@ export default function AnalyticsTab() {
                         </div>
                     </div>
 
-                    <div className="h-[350px] w-full">
+                    <div className="h-[250px] sm:h-[350px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             {activeChart === 'area' ? (
                                 <AreaChart data={data.salesData}>
@@ -179,14 +192,14 @@ export default function AnalyticsTab() {
                 </div>
 
                 {/* Collections Breakdown */}
-                <div className="bg-card border rounded-[3rem] p-10 shadow-sm flex flex-col">
-                    <div className="flex items-center gap-3 mb-10">
-                        <div className="p-3 bg-green-500/10 rounded-2xl text-green-500">
-                            <PieIcon size={24} />
+                <div className="bg-card border rounded-[1.5rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-sm flex flex-col">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-10">
+                        <div className="p-2 sm:p-3 bg-green-500/10 rounded-xl sm:rounded-2xl text-green-500">
+                            <PieIcon size={20} />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-black tracking-tight">Contract Health</h3>
-                            <p className="text-sm text-muted-foreground font-medium">Status distribution of all EMIs.</p>
+                            <h3 className="text-xl sm:text-2xl font-black tracking-tight">Contract Health</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground font-medium">Status distribution.</p>
                         </div>
                     </div>
 

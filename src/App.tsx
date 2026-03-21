@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Store, ShoppingBag, LayoutDashboard, Search, Menu, X, User } from 'lucide-react';
+import { Store, ShoppingBag, LayoutDashboard, Search, Menu, X, User, Bell, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import Home from './pages/Home';
@@ -12,6 +12,7 @@ import VendorOnboarding from './pages/VendorOnboarding';
 import AdminDashboard from './pages/AdminDashboard';
 import Auth from './features/auth/components/AuthPage';
 import Profile from './pages/Profile';
+import Messages from './pages/Messages';
 import ProtectedRoute from './features/auth/components/ProtectedRoute';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -22,20 +23,93 @@ import { Toaster } from 'sonner';
 
 import './index.css';
 
+import NotificationPopover from './components/NotificationPopover';
+
 function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuthStore();
-  const [vendorLogo, setVendorLogo] = React.useState<string | null>(null);
+  const [currentAvatar, setCurrentAvatar] = React.useState<string | null>(null);
+  const [unreadNotifCount, setUnreadNotifCount] = React.useState(0);
+  const [unreadMsgCount, setUnreadMsgCount] = React.useState(0);
+  const [notifications, setNotifications] = React.useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = React.useState(false);
+  const bellRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    if (user?.role === 'vendor' && user?.id) {
-       supabase.from('vendor_profiles').select('logo_url').eq('user_id', user.id).single()
-         .then(({ data }) => setVendorLogo(data?.logo_url || null));
-    } else {
-       setVendorLogo(null);
+    if (!user?.id) {
+       setCurrentAvatar(null);
+       return;
     }
+    
+    const fetchUserData = async () => {
+        const { data: uData } = await supabase.from('users').select('avatar_url').eq('id', user.id).single();
+        if (uData?.avatar_url) {
+            setCurrentAvatar(uData.avatar_url);
+        } else if (user.role === 'vendor') {
+            const { data: vData } = await supabase.from('vendor_profiles').select('logo_url').eq('user_id', user.id).single();
+            setCurrentAvatar(vData?.logo_url || null);
+        }
+    };
+    fetchUserData();
   }, [user]);
+
+  // Real-time listener for notifications and messages
+  React.useEffect(() => {
+    if (!user) return;
+    
+    const fetchAllCounts = async () => {
+      const { data: notifs } = await supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10);
+      setNotifications(notifs || []);
+      setUnreadNotifCount(notifs?.filter(n => !n.is_read).length || 0);
+
+      const { count: msgCount } = await supabase.from('chat_messages').select('*', { count: 'exact', head: true }).eq('receiver_id', user.id).eq('is_read', false);
+      setUnreadMsgCount(msgCount || 0);
+    };
+    fetchAllCounts();
+
+    const notifChannel = supabase.channel('navbar_notifs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload) => {
+        setNotifications(prev => [payload.new, ...prev]);
+        setUnreadNotifCount(prev => prev + 1);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
+        // Simple refresh on update (e.g. marked as read from another tab)
+        fetchAllCounts();
+      })
+      .subscribe();
+
+    const msgChannel = supabase.channel('navbar_msgs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${user.id}` }, () => {
+        setUnreadMsgCount(prev => prev + 1);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `receiver_id=eq.${user.id}` }, () => {
+        fetchAllCounts();
+      })
+      .subscribe();
+
+    return () => { 
+        supabase.removeChannel(notifChannel); 
+        supabase.removeChannel(msgChannel);
+    };
+  }, [user]);
+
+  // Close on click outside
+  React.useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const markAsRead = async (id: string) => {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    setUnreadNotifCount(prev => Math.max(0, prev - 1));
+  };
 
   return (
     <>
@@ -84,6 +158,46 @@ function Navbar() {
                 </span>
               </Link>
             )}
+
+            {isAuthenticated && (
+              <div className="flex items-center gap-3 mr-2">
+                <Link to="/messages">
+                  <motion.div whileHover={{ scale: 1.1 }} className="relative text-muted-foreground hover:text-accent transition-colors">
+                    <MessageSquare size={20} />
+                    {unreadMsgCount > 0 && (
+                      <span className="absolute -top-2 -right-2 w-5 h-5 bg-accent text-white border-2 border-background rounded-full flex items-center justify-center text-[10px] font-black shadow-sm">
+                        {unreadMsgCount > 9 ? '9+' : unreadMsgCount}
+                      </span>
+                    )}
+                  </motion.div>
+                </Link>
+                <div ref={bellRef} className="relative group">
+                  <motion.div 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    whileHover={{ scale: 1.1 }} 
+                    className={`cursor-pointer transition-colors relative ${showNotifications ? 'text-accent' : 'text-muted-foreground hover:text-accent'}`}
+                  >
+                    <Bell size={20} />
+                    {unreadNotifCount > 0 && (
+                      <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 border-2 border-background rounded-full flex items-center justify-center text-[10px] font-black shadow-sm text-white">
+                         {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                      </span>
+                    )}
+                  </motion.div>
+
+                  <AnimatePresence>
+                    {showNotifications && (
+                        <NotificationPopover 
+                            notifications={notifications} 
+                            onClose={() => setShowNotifications(false)}
+                            onMarkRead={markAsRead}
+                        />
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
+
             {!isAuthenticated ? (
               <Link to="/auth">
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
@@ -93,27 +207,21 @@ function Navbar() {
             ) : (
               <div className="flex items-center gap-3">
                 <Link to={user?.role === 'admin' ? '/admin' : user?.role === 'vendor' ? '/vendor' : '/profile'}>
-                  <div className="w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center text-xs font-bold shadow-sm overflow-hidden">
-                    {vendorLogo ? (
-                        <img src={vendorLogo} alt="Shop Logo" className="w-full h-full object-cover" />
+                  <div className="w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center text-xs font-bold shadow-sm overflow-hidden border">
+                    {currentAvatar ? (
+                        <img src={currentAvatar} alt="Profile" className="w-full h-full object-cover" />
                     ) : (
                         user?.name?.charAt(0) || 'U'
                     )}
                   </div>
                 </Link>
-                <div className="flex flex-col text-sm justify-center leading-tight max-w-[100px]">
-                    <span className="font-bold truncate">{user?.name?.split(' ')[0]}</span>
-                    <button onClick={logout} className="text-left text-[10px] font-bold text-muted-foreground hover:text-red-500 transition-colors uppercase tracking-wider">
-                      Logout
-                    </button>
-                </div>
               </div>
             )}
 
             <ThemeToggle />
 
             <Link to="/checkout" className="ml-2">
-              <Button variant="accent" className="rounded-full gap-2 px-5 shadow-sm shadow-accent/20">
+              <Button variant="accent" className="rounded-full gap-2 px-5 shadow-sm shadow-accent/20 h-10">
                 <ShoppingBag size={16} /> <span>Cart</span>
               </Button>
             </Link>
@@ -158,8 +266,8 @@ function Navbar() {
               ) : (
                 <div className="flex flex-col gap-2">
                   <Link to={user?.role === 'admin' ? '/admin' : user?.role === 'vendor' ? '/vendor' : '/profile'} onClick={() => setMobileMenuOpen(false)} className="px-4 py-2 text-sm font-bold bg-accent/10 text-accent rounded-lg flex items-center gap-3">
-                    {vendorLogo ? (
-                        <img src={vendorLogo} alt="Logo" className="w-6 h-6 rounded-full object-cover inline-block" />
+                    {currentAvatar ? (
+                        <img src={currentAvatar} alt="Logo" className="w-6 h-6 rounded-full object-cover inline-block" />
                     ) : (
                         <User size={16} />
                     )} 
@@ -247,6 +355,11 @@ function AnimatedRoutes() {
           <Route path="/profile" element={
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
               <Profile />
+            </motion.div>
+          } />
+          <Route path="/messages" element={
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
+              <Messages />
             </motion.div>
           } />
         </Route>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, Check, CheckCircle2, X } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
+import { TableSkeleton, Skeleton } from '../../../../components/ui/skeleton';
 import { supabase } from '../../../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -85,7 +86,7 @@ export default function OrdersTab() {
             
             <div className="p-6">
                 {loading ? (
-                    <div className="text-center py-10"><div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" /></div>
+                    <TableSkeleton rows={6} />
                 ) : orders.length === 0 ? (
                     <div className="text-center py-12 bg-secondary/30 rounded-3xl border-2 border-dashed">
                         <ShoppingBag size={48} className="mx-auto text-muted-foreground/30 mb-4" />

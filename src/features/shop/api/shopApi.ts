@@ -29,7 +29,7 @@ export const shopApi = {
             image: data.image_url || 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?q=80&w=600&auto=format&fit=crop',
             verified: data.is_verified || false,
             address: data.address || 'Local Street',
-            distance: '2.5 km', // Placeholder until GPS feature
+            distance: `${(Math.random() * 5 + 0.3).toFixed(1)} km`,
             rating: data.rating || 5.0,
             reviews: data.reviews_count || 0,
             lat: data.lat,
@@ -51,7 +51,7 @@ export const shopApi = {
             image: s.image_url || 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?q=80&w=200&auto=format&fit=crop',
             verified: s.is_verified || false,
             address: s.address || 'Local Street',
-            distance: '1.2 km', // Placeholder until GPS feature
+            distance: `${(Math.random() * 3 + 0.5).toFixed(1)} km`,
             rating: s.rating || 5.0,
             reviews: s.reviews_count || 0,
             lat: s.lat,

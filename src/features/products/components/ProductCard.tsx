@@ -11,7 +11,7 @@ export default function ProductCard({ product }: { product: any }) {
                 whileHover={{ y: -6, scale: 1.02 }}
                 className="flex flex-col bg-card border border-border/60 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 h-full"
             >
-                <div className="relative aspect-square p-6 bg-white/50 dark:bg-black/5 flex items-center justify-center">
+                <div className="relative aspect-square p-3 sm:p-6 bg-white/50 dark:bg-black/5 flex items-center justify-center">
                     <motion.img
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -26,11 +26,11 @@ export default function ProductCard({ product }: { product: any }) {
                     </div>
                 </div>
 
-                <div className="flex flex-col flex-1 p-5 gap-3">
+                <div className="flex flex-col flex-1 p-3 sm:p-5 gap-2 sm:gap-3">
                     <div className="flex justify-between items-start gap-2">
                         <div className="flex flex-col">
                             <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">{product.brand}</span>
-                            <h3 className="text-base font-semibold leading-tight line-clamp-2 text-foreground group-hover:text-accent transition-colors">
+                            <h3 className="text-sm sm:text-base font-semibold leading-tight line-clamp-2 text-foreground group-hover:text-accent transition-colors">
                                 {product.name}
                             </h3>
                         </div>
@@ -41,7 +41,7 @@ export default function ProductCard({ product }: { product: any }) {
                     </div>
 
                     <div className="flex items-end gap-2 mt-auto pt-2">
-                        <span className="text-xl font-black tracking-tight">₹{product.price.toLocaleString('en-IN')}</span>
+                        <span className="text-lg sm:text-xl font-black tracking-tight">₹{product.price.toLocaleString('en-IN')}</span>
                         <span className="text-sm text-muted-foreground line-through decoration-muted-foreground/50 pb-0.5">₹{product.mrp.toLocaleString('en-IN')}</span>
                     </div>
 
