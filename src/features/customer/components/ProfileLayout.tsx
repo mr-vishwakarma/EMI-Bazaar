@@ -6,6 +6,15 @@ import { Skeleton, TableSkeleton } from '../../../components/ui/skeleton';
 import { useAuthStore } from '../../auth';
 import { supabase } from '../../../lib/supabase';
 import { toast } from 'sonner';
+import { useRazorpay } from '../../../hooks/useRazorpay';
+import { downloadReceipt } from '../../../utils/generateReceipt';
+
+// Extend the window object
+declare global {
+    interface Window {
+        Razorpay: any;
+    }
+}
 
 export default function Profile() {
     const { user, logout } = useAuthStore();
@@ -25,6 +34,7 @@ export default function Profile() {
     const [myOrders, setMyOrders] = useState<any[]>([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
     const [payingEmiId, setPayingEmiId] = useState<string | null>(null);
+    const isRazorpayLoaded = useRazorpay();
 
     const fetchMyOrders = async () => {
         if (!user?.id) return;
@@ -49,28 +59,106 @@ export default function Profile() {
         setPayingEmiId(order.id);
 
         try {
-            // Simulate payment processing delay showing Razorpay / Stripe
-            toast.loading("Opening Secure Payment Gateway...", { id: 'pay' });
-            await new Promise(r => setTimeout(r, 1500));
-            toast.loading("Processing EMI Repayment...", { id: 'pay' });
-            await new Promise(r => setTimeout(r, 1500));
+            if (!isRazorpayLoaded) {
+               throw new Error("Payment gateway is initializing. Please try again in a moment.");
+            }
 
-            const { data, error } = await supabase.rpc('process_emi_payment', {
-                p_contract_id: order.id,
-                p_amount: Number(order.emi_amount),
-                p_payment_method: 'online'
+            toast.loading("Initiating secure payment...", { id: 'pay' });
+            
+            // Step 1: Request an Order ID via Supabase Edge Function
+            const orderRes = await supabase.functions.invoke('create-razorpay-order', {
+                body: {
+                    amount: Number(order.emi_amount), 
+                    purpose: 'online_payment_emi', // Bypass partial edge function logic to run full RPC
+                    contract_id: order.id 
+                }
             });
 
-            if (error) throw error;
+            if (orderRes.error) throw new Error(orderRes.error.message || "Failed to create payment order");
+            
+            const { order_id, amount, currency, key_id } = orderRes.data;
 
-            toast.success(`Payment of ₹${Number(order.emi_amount).toLocaleString('en-IN')} successful! 🎉`, { id: 'pay' });
-            fetchMyOrders();
-            // Re-fetch profile to update credit limit UI
-            const { data: pData } = await supabase.from('customer_profiles').select('*').eq('user_id', user.id).single();
-            if (pData) setProfile(pData);
+            // Step 2: Configure Razorpay Checkout
+            const options = {
+                key: key_id,
+                amount: amount, 
+                currency: currency,
+                name: 'EMI Bazaar',
+                description: `Repayment for ${order.product?.name}`,
+                order_id: order_id,
+                prefill: {
+                    name: profile?.full_name || user.name,
+                    email: user.email,
+                    contact: profile?.phone || ''
+                },
+                theme: { color: '#0ea5e9' },
+                handler: async function (response: any) {
+                    try {
+                        toast.loading("Verifying transaction...", { id: 'verification' });
+                        toast.dismiss('pay');
+
+                        // Step 3: Verify the signature with our Edge Function
+                        const verifyRes = await supabase.functions.invoke('verify-razorpay-payment', {
+                            body: {
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_signature: response.razorpay_signature
+                            }
+                        });
+
+                        if (verifyRes.error || !verifyRes.data?.success) {
+                            throw new Error(verifyRes.data?.error || "Signature verification failed.");
+                        }
+
+                        toast.loading("Updating your EMI Ledger...", { id: 'verification' });
+
+                        // Step 4: Verification successful. Update the ledger using the battle-tested RPC
+                        const { data, error } = await supabase.rpc('process_emi_payment', {
+                            p_contract_id: order.id,
+                            p_amount: Number(order.emi_amount),
+                            p_payment_method: 'online'
+                        });
+
+                        if (error) throw error;
+
+                        toast.success(`Payment of ₹${Number(order.emi_amount).toLocaleString('en-IN')} verified and logged! 🎉`, { id: 'verification' });
+                        
+                        // Step 5: Generate & Download Official Receipt automatically
+                        const pendingTotal = order.total_amount - order.total_paid - Number(order.emi_amount);
+                        const receiptNo = `RCP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+                        
+                        downloadReceipt({
+                            receiptNumber: receiptNo,
+                            date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                            customerName: profile?.full_name || user.name || 'Valued Customer',
+                            productName: order.product?.name || 'EMI Financing',
+                            amountPaid: Number(order.emi_amount),
+                            paymentMethod: 'Online Payment (Razorpay)',
+                            loanRemaining: pendingTotal > 0 ? pendingTotal : 0
+                        });
+
+                        // Step 6: Refresh UI State
+                        fetchMyOrders();
+                        const { data: pData } = await supabase.from('customer_profiles').select('*').eq('user_id', user.id).single();
+                        if (pData) setProfile(pData);
+                        
+                    } catch (err: any) {
+                       toast.error(err.message || "Verification Exception", { id: 'verification' });
+                    } finally {
+                       setPayingEmiId(null);
+                    }
+                },
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (response: any) {
+                toast.error(`Payment Failed: ${response.error.description}`, { id: 'pay' });
+                setPayingEmiId(null);
+            });
+            rzp.open();
+
         } catch (err: any) {
             toast.error(err.message || 'Payment failed. Please try again.', { id: 'pay' });
-        } finally {
             setPayingEmiId(null);
         }
     };
@@ -483,6 +571,27 @@ export default function Profile() {
                                                             disabled={payingEmiId === order.id}
                                                         >
                                                             {payingEmiId === order.id ? 'Processing...' : `Pay ₹${Number(order.emi_amount).toLocaleString('en-IN')} Now`}
+                                                        </Button>
+                                                    )}
+                                                    
+                                                    {order.total_paid > 0 && (
+                                                        <Button
+                                                            onClick={() => {
+                                                                const pendingTotal = order.total_amount - order.total_paid;
+                                                                downloadReceipt({
+                                                                    receiptNumber: `RCP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+                                                                    date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                                                                    customerName: profile?.full_name || user?.name || 'Customer',
+                                                                    productName: order.product?.name || 'EMI Financing',
+                                                                    amountPaid: Number(order.emi_amount),
+                                                                    paymentMethod: 'Online Payment (Razorpay)',
+                                                                    loanRemaining: pendingTotal > 0 ? pendingTotal : 0
+                                                                });
+                                                            }}
+                                                            variant="outline"
+                                                            className="w-full md:w-auto h-12 rounded-xl font-bold px-6 border-2 hover:bg-secondary"
+                                                        >
+                                                            Download Receipt
                                                         </Button>
                                                     )}
                                                 </div>

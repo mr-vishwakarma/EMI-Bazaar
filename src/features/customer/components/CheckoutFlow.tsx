@@ -8,6 +8,14 @@ import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../auth';
 import { productsApi } from '../../products';
 import { toast } from 'sonner';
+import { useRazorpay } from '../../../hooks/useRazorpay';
+
+// Extend the window object to recognize the dynamically loaded Razorpay
+declare global {
+    interface Window {
+        Razorpay: any;
+    }
+}
 
 export default function Checkout() {
     const [searchParams] = useSearchParams();
@@ -23,6 +31,7 @@ export default function Checkout() {
     const [deliveryMode, setDeliveryMode] = useState('pickup');
     const [autoPayMethod, setAutoPayMethod] = useState('');
     const [orderSuccess, setOrderSuccess] = useState<any>(null);
+    const isRazorpayLoaded = useRazorpay();
 
     const productId = searchParams.get('productId');
     const planIndex = parseInt(searchParams.get('planIndex') || '0');
@@ -85,48 +94,114 @@ export default function Checkout() {
         const emi = Math.round(total / duration);
 
         try {
-            // Simulated delay to "setup AutoPay Mandate" with Bank / UPI
-            toast.loading("Setting up Secure EMI Mandate...", { id: 'setup' });
-            await new Promise(r => setTimeout(r, 2000));
-            toast.loading("Verifying AutoPay with NPCI...", { id: 'setup' });
-            await new Promise(r => setTimeout(r, 1500));
-            toast.dismiss('setup');
+            if (!isRazorpayLoaded) {
+               throw new Error("Payment gateway is initializing. Please try again in a moment.");
+            }
 
-            const { data, error } = await supabase.rpc('create_online_emi_order', {
-                p_customer_id: user.id,
-                p_vendor_id: product.vendorId || product.vendor_id || product.shops?.vendor_id,
-                p_shop_id: product.shopId || product.shop_id,
-                p_product_id: product.id,
-                p_product_price: principal,
-                p_down_payment: 0,
-                p_principal_amount: principal,
-                p_interest_rate: rate,
-                p_total_amount: total,
-                p_emi_amount: emi,
-                p_duration_count: duration,
-                p_duration_type: type,
-                p_next_due_date: nextDue.toISOString().split('T')[0]
+            toast.loading("Initiating secure checkout...", { id: 'setup' });
+            
+            // Step 1: Request an Order ID via Supabase Edge Function
+            const orderRes = await supabase.functions.invoke('create-razorpay-order', {
+                body: {
+                    amount: 99, // Processing Fee in Rupees (to bind the card/account)
+                    purpose: 'checkout',
+                    contract_id: null // Contract isn't created yet
+                }
             });
 
-            if (error) {
-                console.error("RPC Error:", error);
-                throw new Error(error.message || "Failed to call checkout procedure");
-            }
+            if (orderRes.error) throw new Error(orderRes.error.message || "Failed to create payment order");
+            
+            const { order_id, amount, currency, key_id } = orderRes.data;
 
-            if (data.success) {
-                setOrderSuccess(data);
-                setStep(4);
-                toast.success("EMI Order Placed Successfully!");
-            } else {
-                if (data.error === 'KYC_NOT_VERIFIED') {
-                    toast.error("Your KYC is not verified yet.");
-                } else {
-                    toast.error(data.error || "Failed to create order");
-                }
-            }
+            // Step 2: Configure Razorpay Checkout
+            const options = {
+                key: key_id,
+                amount: amount, // in paise
+                currency: currency,
+                name: 'EMI Bazaar',
+                description: 'Processing Fee & Mandate Setup',
+                image: '/logo.png', // Fallback to a logo you have or leave default
+                order_id: order_id,
+                prefill: {
+                    name: profile.full_name,
+                    email: user.email,
+                    contact: profile.phone
+                },
+                theme: {
+                    color: '#0ea5e9' // brand color (accent)
+                },
+                handler: async function (response: any) {
+                    try {
+                        toast.loading("Verifying payment...", { id: 'verification' });
+                        toast.dismiss('setup');
+
+                        // Step 3: Verify the signature with our Edge Function
+                        const verifyRes = await supabase.functions.invoke('verify-razorpay-payment', {
+                            body: {
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_signature: response.razorpay_signature
+                            }
+                        });
+
+                        if (verifyRes.error || !verifyRes.data?.success) {
+                            throw new Error(verifyRes.data?.error || "Signature verification failed.");
+                        }
+
+                        toast.success("Payment verified! Finalizing contract...", { id: 'verification' });
+
+                        // Step 4: Verification successful. Create the Contract on our backend
+                        const { data, error } = await supabase.rpc('create_online_emi_order', {
+                            p_customer_id: user.id,
+                            p_vendor_id: product.vendorId || product.vendor_id || product.shops?.vendor_id,
+                            p_shop_id: product.shopId || product.shop_id,
+                            p_product_id: product.id,
+                            p_product_price: principal,
+                            p_down_payment: 0,
+                            p_principal_amount: principal,
+                            p_interest_rate: rate,
+                            p_total_amount: total,
+                            p_emi_amount: emi,
+                            p_duration_count: duration,
+                            p_duration_type: type,
+                            p_next_due_date: nextDue.toISOString().split('T')[0]
+                        });
+
+                        if (error) {
+                            console.error("RPC Error:", error);
+                            throw new Error(error.message || "Failed to call checkout procedure");
+                        }
+
+                        if (data.success) {
+                            setOrderSuccess(data);
+                            setStep(4);
+                            toast.success("EMI Order Placed Successfully!");
+                        } else {
+                            if (data.error === 'KYC_NOT_VERIFIED') {
+                                toast.error("Your KYC is not verified yet.");
+                            } else {
+                                toast.error(data.error || "Failed to create order");
+                            }
+                        }
+
+                    } catch (err: any) {
+                       toast.error(err.message || "Verification Exception", { id: 'verification' });
+                    } finally {
+                       setLoading(false);
+                    }
+                },
+            };
+
+            // Step 5: Open the Razorpay Modal
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (response: any) {
+                toast.error(`Payment Failed: ${response.error.description}`, { id: 'setup' });
+                setLoading(false);
+            });
+            rzp.open();
+
         } catch (err: any) {
-            toast.error(err.message || "An error occurred during checkout");
-        } finally {
+            toast.error(err.message || "An error occurred during checkout", { id: 'setup' });
             setLoading(false);
         }
     };
