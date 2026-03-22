@@ -1,35 +1,31 @@
--- 29_user_avatars_and_message_status.sql
--- Enhancing User Profiles with Avatars and Chat with Status Ticks
+-- 29_user_avatars_and_message_status.sql (Refined)
 
--- 1. Add avatar_url to users table
+-- 1. Ensure avatar_url exists of users table (for admins or fallback)
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
--- 2. Add status to chat_messages (complementing is_read)
-ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent'; -- 'sent', 'delivered', 'seen'
+-- 2. Add status to chat_messages
+ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent';
 
--- 3. Update existing messages to reflect seen status if they are read
-UPDATE public.chat_messages SET status = 'seen' WHERE is_read = true;
-UPDATE public.chat_messages SET status = 'delivered' WHERE is_read = false;
-
--- 4. RPC to fetch user profile with role-specific data (unifying avatar logic)
-CREATE OR REPLACE FUNCTION get_user_navbar_data(p_user_id UUID)
+-- 3. Refined helper to fetch unified profile data
+CREATE OR REPLACE FUNCTION get_user_chat_profiles(p_user_ids UUID[])
 RETURNS TABLE (
     id UUID,
-    full_name TEXT,
+    name TEXT,
     role TEXT,
-    avatar_url TEXT,
-    shop_logo TEXT
+    avatar_url TEXT
 ) AS $$
 BEGIN
     RETURN QUERY
     SELECT 
         u.id,
-        u.full_name,
+        u.full_name as name,
         u.role::TEXT,
-        u.avatar_url,
-        v.logo_url as shop_logo
+        CASE 
+            WHEN u.role = 'vendor' THEN (SELECT v.logo_url FROM public.vendor_profiles v WHERE v.user_id = u.id)
+            WHEN u.role = 'customer' THEN (SELECT c.avatar_url FROM public.customer_profiles c WHERE c.user_id = u.id)
+            ELSE u.avatar_url 
+        END as avatar_url
     FROM public.users u
-    LEFT JOIN public.vendor_profiles v ON v.user_id = u.id
-    WHERE u.id = p_user_id;
+    WHERE u.id = ANY(p_user_ids);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

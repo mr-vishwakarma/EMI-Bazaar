@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Check, CheckCircle2, Smartphone, ChevronRight, Search, ShieldCheck,
     ShieldAlert, FileText, User, AlertCircle, CreditCard, Package,
-    Loader2, RefreshCw, KeyRound
+    Loader2, RefreshCw, KeyRound, QrCode
 } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
 import { supabase } from '../../../../lib/supabase';
@@ -43,12 +43,17 @@ export default function PosTab(_props: PosTabProps) {
     const [createdContract, setCreatedContract] = useState<any>(null);
     const [isVerifyingKyc, setIsVerifyingKyc] = useState(false);
 
+    // AutoPay state
+    const [autoPayCode, setAutoPayCode] = useState<string | null>(null);
+    const [isGeneratingAutoPay, setIsGeneratingAutoPay] = useState(false);
+
     // ─── Reset ────────────────────────────────────────────────────
     const reset = () => {
         setStep(1); setPhone(''); setCustomer(null); setCustomerId('');
         setGeneratedOtp(''); setOtpInput(['', '', '', '']);
         setProductShortId(''); setProduct(null);
         setSelectedPlan(null); setDownPayment(''); setCreatedContract(null);
+        setAutoPayCode(null); setIsGeneratingAutoPay(false);
     };
 
     // ─── Step 1: Lookup or register customer by phone ─────────────
@@ -137,13 +142,22 @@ export default function PosTab(_props: PosTabProps) {
     // ─── Step 4: Find product ─────────────────────────────────────
     const handleProductSearch = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!productShortId.trim()) return;
+        let queryId = productShortId.trim();
+        if (!queryId) return;
+        
+        // If the vendor scans the QR code directly, it might paste the full URL.
+        // Extract just the short tag from the end of the URL.
+        if (queryId.toUpperCase().includes('/PRODUCT/')) {
+            const parts = queryId.toUpperCase().split('/PRODUCT/');
+            queryId = parts[parts.length - 1].replace(/[^A-Z0-9-]/g, '');
+        }
+        
         setIsSearchingProduct(true);
 
         const { data, error } = await supabase
             .from('products')
             .select('*, shops(id, vendor_id)')
-            .ilike('short_tag', productShortId.trim())
+            .ilike('short_tag', queryId)
             .single();
 
         if (error || !data) {
@@ -226,6 +240,38 @@ export default function PosTab(_props: PosTabProps) {
             toast.error(err.message || 'Failed to create contract');
         } finally {
             setIsCreatingContract(false);
+        }
+    };
+
+    const handleGenerateAutoPay = async () => {
+        if (!createdContract || !customer) return;
+        setIsGeneratingAutoPay(true);
+
+        try {
+            const res = await supabase.functions.invoke('create-autopay-link', {
+                body: {
+                    contract_id: createdContract.id,
+                    customer_phone: customer.phone || phone || '9999999999',
+                    customer_name: customer.full_name || 'Customer',
+                    amount: createdContract.emi_amount
+                }
+            });
+
+            console.log("Edge function invocation result:", res);
+
+            if (res.error) {
+                console.error("Full Edge Error:", res.error);
+                // Extract inner error if available
+                const contextRaw = res.error?.context ? JSON.stringify(res.error.context) : '';
+                throw new Error(res.data?.error || res.error.message || `Failed to generate link. ${contextRaw}`);
+            }
+            
+            setAutoPayCode(res.data.short_url);
+            toast.success("QR Code Generated! Ask customer to scan it.");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to generate AutoPay link");
+        } finally {
+            setIsGeneratingAutoPay(false);
         }
     };
 
@@ -490,19 +536,60 @@ export default function PosTab(_props: PosTabProps) {
                     {/* ── STEP 7: Success ── */}
                     {step === 7 && createdContract && (
                         <motion.div key="s7" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center text-center py-4">
-                            <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mb-6">
-                                <CheckCircle2 size={52} className="text-green-500" />
-                            </div>
-                            <h2 className="text-3xl font-black mb-2">EMI Created! 🎉</h2>
-                            <p className="text-muted-foreground mb-6 max-w-sm">The agreement is locked in. Share the Contract ID with your customer for reference.</p>
-                            <div className="w-full bg-secondary/50 p-5 rounded-2xl border mb-6 text-left space-y-2.5">
-                                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-3">Contract Details</p>
-                                {[['Contract ID', createdContract.short_id], ['Customer', customer?.full_name || phone], ['Product', product?.name], ['EMI', `₹${Math.ceil(createdContract.emi_amount).toLocaleString('en-IN')} / ${createdContract.duration_type === 'monthly' ? 'month' : 'week'}`], ['Duration', `${createdContract.duration_count} ${createdContract.duration_type === 'monthly' ? 'months' : 'weeks'}`], ['Next Due', new Date(createdContract.next_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })]]
-                                    .map(([l, v]) => <div key={l} className="flex justify-between text-sm"><span className="text-muted-foreground">{l}</span><span className="font-bold">{v}</span></div>)}
-                            </div>
-                            <Button onClick={reset} variant="outline" className="w-full h-12 rounded-xl font-bold border-2 gap-2">
-                                <RefreshCw size={18} /> Start New EMI Order
-                            </Button>
+                            {!autoPayCode ? (
+                                <>
+                                    <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mb-6">
+                                        <CheckCircle2 size={52} className="text-green-500" />
+                                    </div>
+                                    <h2 className="text-3xl font-black mb-2">EMI Created! 🎉</h2>
+                                    <p className="text-muted-foreground mb-6 max-w-sm">The agreement is locked in. Share the Contract ID with your customer for reference.</p>
+                                    <div className="w-full bg-secondary/50 p-5 rounded-2xl border mb-6 text-left space-y-2.5">
+                                        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-3">Contract Details</p>
+                                        {[['Contract ID', createdContract.short_id], ['Customer', customer?.full_name || phone], ['Product', product?.name], ['EMI', `₹${Math.ceil(createdContract.emi_amount).toLocaleString('en-IN')} / ${createdContract.duration_type === 'monthly' ? 'month' : 'week'}`], ['Duration', `${createdContract.duration_count} ${createdContract.duration_type === 'monthly' ? 'months' : 'weeks'}`], ['Next Due', new Date(createdContract.next_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })]]
+                                            .map(([l, v]) => <div key={l} className="flex justify-between text-sm"><span className="text-muted-foreground">{l}</span><span className="font-bold">{v}</span></div>)}
+                                    </div>
+                                    
+                                    <div className="w-full flex flex-col md:flex-row gap-4">
+                                        <Button onClick={reset} variant="outline" className="flex-1 h-14 rounded-2xl font-bold border-2 gap-2">
+                                            <RefreshCw size={18} /> New Session
+                                        </Button>
+                                        <Button onClick={handleGenerateAutoPay} variant="accent" className="flex-[2] h-14 rounded-2xl font-bold shadow-xl shadow-accent/20 gap-2" disabled={isGeneratingAutoPay}>
+                                            {isGeneratingAutoPay ? <Loader2 size={24} className="animate-spin" /> : <QrCode size={24} />}
+                                            {isGeneratingAutoPay ? 'Generating Link...' : 'Generate AutoPay QR Setup'}
+                                        </Button>
+                                    </div>
+                                </>
+                            ) : (
+                                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center text-center">
+                                    <div className="bg-accent text-white px-4 py-1.5 rounded-full text-xs font-black tracking-widest uppercase mb-6 shadow-md shadow-accent/30">
+                                        Customer Action Required
+                                    </div>
+                                    <h2 className="text-3xl font-black mb-2">Setup UPI Mandate</h2>
+                                    <p className="text-muted-foreground mb-8 text-sm font-medium">Ask the customer to point their Phone Camera at this QR Code to authorize recurring EMI payments.</p>
+                                    
+                                    <div className="bg-white p-6 rounded-3xl block mb-8 shadow-2xl shadow-accent/10 ring-1 ring-border relative hover:scale-[1.02] transition-transform">
+                                        {/* Scanner decorative corners */}
+                                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-accent rounded-tl-2xl" />
+                                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-accent rounded-tr-2xl" />
+                                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-accent rounded-bl-2xl" />
+                                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-accent rounded-br-2xl" />
+                                        
+                                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(autoPayCode)}`} alt="AutoPay QR Code" className="w-[200px] h-[200px] md:w-[250px] md:h-[250px] mix-blend-multiply" />
+                                    </div>
+                                    
+                                    <div className="bg-blue-500/10 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-6 py-4 rounded-2xl text-sm font-semibold max-w-sm mb-6 flex items-start gap-3">
+                                        <ShieldCheck className="shrink-0 text-blue-500" size={20} />
+                                        <div className="text-left">
+                                            <p className="mb-1">Customer uses Camera App (Not GPay App).</p>
+                                            <p className="opacity-80 font-normal">If testing locally, scan this and type 'success@razorpay' when it prompts for UPI ID.</p>
+                                        </div>
+                                    </div>
+
+                                    <Button onClick={reset} variant="ghost" className="h-12 rounded-xl font-bold w-full uppercase tracking-widest text-muted-foreground hover:bg-secondary">
+                                        Close & Return to POS
+                                    </Button>
+                                </motion.div>
+                            )}
                         </motion.div>
                     )}
 

@@ -21,12 +21,13 @@ interface Conversation {
     other_user_id: string;
     other_user_name: string;
     other_user_role: string;
+    other_user_avatar?: string;
     last_message: string;
     last_message_at: string;
     unread_count: number;
 }
 
-export default function Messages() {
+export default function ChatPage() {
     const { user } = useAuthStore();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -72,14 +73,15 @@ export default function Messages() {
                 }
             });
 
-            // Fetch user names for these IDs
+            // Fetch user profiles for these IDs (refined role-based avatars)
             const otherIds = Object.keys(grouped);
             if (otherIds.length > 0) {
-                const { data: userData } = await supabase.from('users').select('id, name, role').in('id', otherIds);
-                userData?.forEach(u => {
+                const { data: userData } = await supabase.rpc('get_user_chat_profiles', { p_user_ids: otherIds });
+                userData?.forEach((u: any) => {
                     if (grouped[u.id]) {
                         grouped[u.id].other_user_name = u.name;
                         grouped[u.id].other_user_role = u.role;
+                        grouped[u.id].other_user_avatar = u.avatar_url;
                     }
                 });
             }
@@ -219,7 +221,11 @@ export default function Messages() {
                                 className={`p-4 rounded-2xl flex gap-3 cursor-pointer transition-all hover:bg-secondary/50 ${selectedUserId === conv.other_user_id ? 'bg-accent/5 border border-accent/20' : 'border border-transparent'}`}
                             >
                                 <div className="w-12 h-12 rounded-full bg-accent text-white flex items-center justify-center font-bold text-lg shrink-0 overflow-hidden border">
-                                    {conv.other_user_name?.charAt(0) || 'U'}
+                                    {conv.other_user_avatar ? (
+                                        <img src={conv.other_user_avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                    ) : (
+                                        conv.other_user_name?.charAt(0) || 'U'
+                                    )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-start mb-0.5">
@@ -250,7 +256,11 @@ export default function Messages() {
                                     <ChevronLeft />
                                 </Button>
                                 <div className="w-10 h-10 rounded-full bg-accent text-white flex items-center justify-center font-bold overflow-hidden border">
-                                    {activeChat?.other_user_name?.charAt(0) || 'U'}
+                                    {activeChat?.other_user_avatar ? (
+                                        <img src={activeChat.other_user_avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                    ) : (
+                                        activeChat?.other_user_name?.charAt(0) || 'U'
+                                    )}
                                 </div>
                                 <div>
                                     <h2 className="font-bold leading-tight">{activeChat?.other_user_name}</h2>

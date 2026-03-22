@@ -21,7 +21,8 @@ export default function ProductQRModal({ product, onClose }: ProductQRModalProps
     if (!product) return null;
 
     // The QR code encodes the full product URL for customer scanning
-    const qrValue = `${window.location.origin}/product/${product.short_tag}`;
+    const baseUrl = window.location.origin.includes('localhost') ? 'https://emi-bazaar.vercel.app' : window.location.origin;
+    const qrValue = `${baseUrl}/product/${product.short_tag}`;
 
     const handlePrint = () => {
         const printContent = printRef.current;

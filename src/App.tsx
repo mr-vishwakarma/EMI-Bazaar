@@ -12,7 +12,7 @@ import VendorOnboarding from './pages/VendorOnboarding';
 import AdminDashboard from './pages/AdminDashboard';
 import Auth from './features/auth/components/AuthPage';
 import Profile from './pages/Profile';
-import Messages from './pages/Messages';
+import ChatPage from './pages/ChatPage';
 import ProtectedRoute from './features/auth/components/ProtectedRoute';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -43,12 +43,9 @@ function Navbar() {
     }
     
     const fetchUserData = async () => {
-        const { data: uData } = await supabase.from('users').select('avatar_url').eq('id', user.id).single();
-        if (uData?.avatar_url) {
-            setCurrentAvatar(uData.avatar_url);
-        } else if (user.role === 'vendor') {
-            const { data: vData } = await supabase.from('vendor_profiles').select('logo_url').eq('user_id', user.id).single();
-            setCurrentAvatar(vData?.logo_url || null);
+        const { data } = await supabase.rpc('get_user_chat_profiles', { p_user_ids: [user.id] });
+        if (data?.[0]?.avatar_url) {
+            setCurrentAvatar(data[0].avatar_url);
         }
     };
     fetchUserData();
@@ -359,7 +356,7 @@ function AnimatedRoutes() {
           } />
           <Route path="/messages" element={
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
-              <Messages />
+              <ChatPage />
             </motion.div>
           } />
         </Route>
