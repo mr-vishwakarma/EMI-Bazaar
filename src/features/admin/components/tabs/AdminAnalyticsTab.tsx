@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Store, Users, Activity, IndianRupee, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Store, Users, Activity, IndianRupee, TrendingUp, RefreshCw, PieChart as PieIcon, BarChart as BarIcon, LineChart as LineIcon, Clock, Package, AlertCircle } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
+import { Skeleton, StatCardSkeleton } from '../../../../components/ui/skeleton';
 import { supabase } from '../../../../lib/supabase';
 import { toast } from 'sonner';
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+    ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie
+} from 'recharts';
+
+const VENDOR_COLORS = ['#FF6B3D', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
 
 export default function AdminAnalyticsTab() {
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
+    const [activeChart, setActiveChart] = useState<'area' | 'bar'>('area');
+    const [topVendors, setTopVendors] = useState<any[]>([]);
+    const [recentContracts, setRecentContracts] = useState<any[]>([]);
 
     const fetchAnalytics = async () => {
         setLoading(true);
@@ -15,6 +25,33 @@ export default function AdminAnalyticsTab() {
             const { data: analytics, error } = await supabase.rpc('get_admin_analytics');
             if (error) throw error;
             setData(analytics);
+
+            // Fetch top vendors by contract count
+            const { data: contracts } = await supabase
+                .from('emi_contracts')
+                .select('shop_id, product_price, shops(name, vendor_id)');
+
+            if (contracts) {
+                const vendorMap: Record<string, { name: string; count: number; revenue: number }> = {};
+                contracts.forEach((c: any) => {
+                    const shopName = c.shops?.name || 'Unknown';
+                    const key = c.shop_id;
+                    if (!vendorMap[key]) vendorMap[key] = { name: shopName, count: 0, revenue: 0 };
+                    vendorMap[key].count += 1;
+                    vendorMap[key].revenue += Number(c.product_price || 0);
+                });
+                const sorted = Object.values(vendorMap).sort((a, b) => b.count - a.count).slice(0, 6);
+                setTopVendors(sorted);
+            }
+
+            // Fetch recent contracts
+            const { data: recent } = await supabase
+                .from('emi_contracts')
+                .select('short_id, emi_amount, status, created_at, shops(name), products(name), customer:customer_profiles!customer_id(full_name)')
+                .order('created_at', { ascending: false })
+                .limit(5);
+            setRecentContracts(recent || []);
+
         } catch (err: any) {
             console.error(err);
             toast.error("Failed to load admin analytics: " + err.message);
@@ -33,69 +70,360 @@ export default function AdminAnalyticsTab() {
         return `₹${val.toLocaleString('en-IN')}`;
     };
 
+    if (loading && !data) {
+        return (
+            <div className="space-y-8 pb-10">
+                <div className="flex justify-between items-center">
+                    <div className="space-y-2">
+                        <Skeleton className="h-10 w-48" />
+                        <Skeleton className="h-4 w-64" />
+                    </div>
+                    <Skeleton className="h-12 w-40 rounded-2xl" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[...Array(4)].map((_, i) => <StatCardSkeleton key={i} />)}
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                    <Skeleton className="xl:col-span-2 h-[500px] rounded-[3rem]" />
+                    <Skeleton className="h-[500px] rounded-[3rem]" />
+                </div>
+            </div>
+        );
+    }
+
+    if (!data) return null;
+
     const stats = [
-        { label: 'Total active shops',       value: data?.totalVendors || 0,        icon: Store,        bg: 'bg-blue-500/10',   color: 'text-blue-500' },
-        { label: 'Total verified customers', value: data?.totalCustomers || 0,      icon: Users,        bg: 'bg-accent/10',     color: 'text-accent' },
-        { label: 'EMI Loans Disbursed',      value: data?.totalContracts || 0,      icon: Activity,     bg: 'bg-purple-500/10', color: 'text-purple-500' },
-        { label: 'Total Platform GMV',       value: formatCurrency(data?.totalGMV || 0), icon: IndianRupee, bg: 'bg-green-500/10',  color: 'text-green-500' }
+        {
+            label: 'Total Active Shops',
+            value: data.totalVendors || 0,
+            icon: Store,
+            color: 'blue',
+            desc: 'Registered & approved vendor stores'
+        },
+        {
+            label: 'Verified Customers',
+            value: data.totalCustomers || 0,
+            icon: Users,
+            color: 'accent',
+            desc: 'KYC-passed customer accounts'
+        },
+        {
+            label: 'EMI Loans Disbursed',
+            value: data.totalContracts || 0,
+            icon: Activity,
+            color: 'purple',
+            desc: 'Total contracts created platform-wide'
+        },
+        {
+            label: 'Platform GMV',
+            value: formatCurrency(data.totalGMV || 0),
+            icon: IndianRupee,
+            color: 'green',
+            desc: 'Gross merchandise value across all vendors'
+        }
     ];
 
-    return (
-        <motion.div key="analytics" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="space-y-6">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h1 className="text-3xl font-black text-foreground tracking-tight">System Master Dashboard</h1>
-                    <p className="text-muted-foreground font-medium">Real-time overview of total platform activity and economy.</p>
+    // Build monthly sales data from contracts if available
+    const salesData = data.salesData || [
+        { name: 'Jan', value: 0 }, { name: 'Feb', value: 0 },
+        { name: 'Mar', value: 0 }, { name: 'Apr', value: 0 },
+        { name: 'May', value: 0 }, { name: 'Jun', value: 0 },
+    ];
+
+    const activeContracts = data.activeContracts || 0;
+    const completedContracts = data.completedContracts || 0;
+    const totalCollected = data.totalCollected || 0;
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-background/95 backdrop-blur-md border rounded-2xl p-4 shadow-xl ring-1 ring-black/5">
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
+                    <p className="text-lg font-black text-rose-500">₹{Number(payload[0].value).toLocaleString('en-IN')}</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={fetchAnalytics} className="rounded-xl border-2 font-bold py-1.5 h-10 px-4 group">
-                        <RefreshCw size={18} className={`mr-2 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-                        Sync
+            );
+        }
+        return null;
+    };
+
+    const statusColor = (status: string) => {
+        switch (status) {
+            case 'active': return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
+            case 'completed': return 'bg-green-500/10 text-green-600 border-green-500/20';
+            case 'defaulted': return 'bg-red-500/10 text-red-600 border-red-500/20';
+            default: return 'bg-secondary text-muted-foreground border-border';
+        }
+    };
+
+    return (
+        <motion.div key="analytics" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} className="space-y-8 pb-10">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight flex items-center gap-2 sm:gap-3">
+                        System <span className="text-rose-500">Dashboard</span>
+                    </h1>
+                    <p className="text-sm sm:text-lg text-muted-foreground font-medium">Real-time platform-wide metrics.</p>
+                </div>
+                <div className="flex gap-3">
+                    <Button onClick={fetchAnalytics} variant="outline" className="rounded-2xl h-12 bg-card border-2 font-bold gap-2 px-6 shadow-sm hover:bg-secondary">
+                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                        Sync Data
                     </Button>
-                    <Button className="bg-foreground text-background font-bold tracking-widest uppercase rounded-xl h-10 px-6">Export Report</Button>
+                    <Button className="bg-foreground text-background font-bold tracking-widest uppercase rounded-2xl h-12 px-6">Export Report</Button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {stats.map((stat, idx) => (
-                    <div key={idx} className="bg-card border p-6 rounded-[2rem] shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+            {/* Top Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {stats.map((s, i) => (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        key={i}
+                        className="bg-card border p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-sm relative overflow-hidden group hover:shadow-xl hover:shadow-rose-500/5 transition-all duration-500"
+                    >
                         <div className="absolute -bottom-6 -right-6 text-foreground/[0.10] transition-all group-hover:scale-110 group-hover:-rotate-3 duration-700 pointer-events-none">
-                            <stat.icon size={120} strokeWidth={1} />
+                            <s.icon size={120} strokeWidth={1.5} />
                         </div>
-                        <div className={`w-12 h-12 rounded-2xl mb-4 flex items-center justify-center ${stat.bg}`}>
-                            <stat.icon size={24} className={stat.color} />
-                        </div>
-                        <h2 className={`text-3xl font-black mb-1 relative z-10 ${loading ? 'opacity-20 transition-opacity' : 'opacity-100'}`}>
-                            {loading ? '---' : stat.value}
-                        </h2>
-                        <p className="text-sm font-bold text-muted-foreground relative z-10">{stat.label}</p>
-                    </div>
+                        <p className="text-muted-foreground font-bold text-[10px] sm:text-xs uppercase tracking-widest mb-2 sm:mb-3">{s.label}</p>
+                        <h2 className="text-2xl sm:text-3xl font-black mb-2 sm:mb-3 relative z-10 tracking-tight">{s.value}</h2>
+                        <p className="text-xs font-bold text-muted-foreground/60 leading-relaxed max-w-[140px]">{s.desc}</p>
+                        <div className={`absolute bottom-0 left-0 h-1.5 w-full bg-${s.color === 'accent' ? 'accent' : s.color + '-500'}/10`} />
+                    </motion.div>
                 ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-card border rounded-[2rem] p-8 h-80 flex flex-col items-center justify-center shadow-sm">
-                    <TrendingUp size={48} className="text-muted-foreground/30 mb-4" />
-                    <h3 className="font-bold text-muted-foreground">Global Growth Chart Placeholder</h3>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Cross-vendor performance analytics coming soon.</p>
-                </div>
-                <div className="bg-red-500/5 dark:bg-red-950/20 border border-red-500/20 rounded-[2rem] p-6 shadow-sm flex flex-col">
-                    <h3 className="font-bold text-red-600 dark:text-red-400 flex items-center gap-2 mb-4">
-                        <AlertTriangle size={18} /> Critical Alerts ({loading ? "..." : (data?.activeContracts > 10 ? "!!!" : "3")})
-                    </h3>
-                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 text-foreground">
-                        {[
-                            'Gateway API timeout on Server C',
-                            'Suspicious EMI burst from Store #590',
-                            'Unusual stock wipeout on iPhone 15 SKU'
-                        ].map((alert, i) => (
-                            <div key={i} className="bg-background/80 p-3 rounded-xl border border-red-500/20 text-sm font-medium">
-                                <div className="w-2 h-2 rounded-full bg-red-500 inline-block mr-2" />{alert}
+            {/* Main Charts */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                {/* Revenue Timeline */}
+                <div className="xl:col-span-2 bg-card border rounded-[1.5rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-sm relative">
+                    <div className="flex justify-between items-center mb-6 sm:mb-10">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-2 sm:p-3 bg-rose-500/10 rounded-xl sm:rounded-2xl text-rose-500">
+                                <TrendingUp size={20} />
                             </div>
-                        ))}
+                            <div>
+                                <h3 className="text-xl sm:text-2xl font-black tracking-tight">Platform Revenue</h3>
+                                <p className="text-xs sm:text-sm text-muted-foreground font-medium">Global monthly breakdown.</p>
+                            </div>
+                        </div>
+                        <div className="flex bg-secondary p-1 rounded-xl">
+                            <button onClick={() => setActiveChart('area')} className={`p-2 rounded-lg transition-all ${activeChart === 'area' ? 'bg-card text-rose-500 shadow-sm' : 'text-muted-foreground'}`}><LineIcon size={18} /></button>
+                            <button onClick={() => setActiveChart('bar')} className={`p-2 rounded-lg transition-all ${activeChart === 'bar' ? 'bg-card text-rose-500 shadow-sm' : 'text-muted-foreground'}`}><BarIcon size={18} /></button>
+                        </div>
+                    </div>
+
+                    <div className="h-[250px] sm:h-[350px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            {activeChart === 'area' ? (
+                                <AreaChart data={salesData}>
+                                    <defs>
+                                        <linearGradient id="colorAdminSales" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+                                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12, fontWeight: 700}} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `₹${val/1000}k`} />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    <Area type="monotone" dataKey="value" stroke="#f43f5e" strokeWidth={4} fillOpacity={1} fill="url(#colorAdminSales)" animationDuration={2000} />
+                                </AreaChart>
+                            ) : (
+                                <BarChart data={salesData}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12, fontWeight: 700}} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `₹${val/1000}k`} />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    <Bar dataKey="value" fill="#f43f5e" radius={[10, 10, 0, 0]} animationDuration={1500} />
+                                </BarChart>
+                            )}
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Contract Health Pie */}
+                <div className="bg-card border rounded-[1.5rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-sm flex flex-col">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-10">
+                        <div className="p-2 sm:p-3 bg-green-500/10 rounded-xl sm:rounded-2xl text-green-500">
+                            <PieIcon size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-xl sm:text-2xl font-black tracking-tight">Contract Health</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground font-medium">Platform-wide status.</p>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 min-h-[300px] relative">
+                        {activeContracts === 0 && completedContracts === 0 ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-secondary/20 rounded-3xl border-2 border-dashed">
+                                <AlertCircle size={40} className="text-muted-foreground/40 mb-3" />
+                                <p className="text-muted-foreground font-bold">No contracts to analyze.</p>
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={[
+                                            { name: 'Active', value: activeContracts },
+                                            { name: 'Completed', value: completedContracts }
+                                        ]}
+                                        cx="50%" cy="50%"
+                                        innerRadius={80}
+                                        outerRadius={110}
+                                        paddingAngle={10}
+                                        dataKey="value"
+                                        animationDuration={1500}
+                                    >
+                                        <Cell fill="#f43f5e" />
+                                        <Cell fill="#10b981" />
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        )}
+
+                        {(activeContracts > 0 || completedContracts > 0) && (
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                                <p className="text-4xl font-black tracking-tighter">{activeContracts + completedContracts}</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Deals</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4 pt-6 border-t mt-4">
+                        <div className="flex justify-between items-center bg-rose-500/5 p-4 rounded-2xl border border-rose-500/10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-rose-500" />
+                                <span className="font-bold text-sm">Active & Pending</span>
+                            </div>
+                            <span className="font-black text-lg">{activeContracts}</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-green-500/5 p-4 rounded-2xl border border-green-500/10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-green-500" />
+                                <span className="font-bold text-sm">Fully Completed</span>
+                            </div>
+                            <span className="font-black text-lg">{completedContracts}</span>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Top Vendors + Recent Contracts */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                {/* Top Vendors */}
+                <div className="bg-card border rounded-[1.5rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-sm">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8">
+                        <div className="p-2 sm:p-3 bg-purple-500/10 rounded-xl sm:rounded-2xl text-purple-500">
+                            <Package size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-xl sm:text-2xl font-black tracking-tight">Top Vendors</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground font-medium">By contract volume.</p>
+                        </div>
+                    </div>
+
+                    {topVendors.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center text-center py-12 bg-secondary/20 rounded-3xl border-2 border-dashed">
+                            <AlertCircle size={36} className="text-muted-foreground/40 mb-3" />
+                            <p className="text-muted-foreground font-bold">No vendor data yet.</p>
+                        </div>
+                    ) : (
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={topVendors} layout="vertical" margin={{ left: 0, right: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(0,0,0,0.05)" />
+                                    <XAxis type="number" axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12, fontWeight: 700}} />
+                                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#888', fontSize: 12, fontWeight: 700}} width={120} />
+                                    <Tooltip
+                                        content={({ active, payload }: any) => {
+                                            if (active && payload?.length) {
+                                                return (
+                                                    <div className="bg-background/95 backdrop-blur-md border rounded-2xl p-4 shadow-xl ring-1 ring-black/5">
+                                                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">{payload[0].payload.name}</p>
+                                                        <p className="text-lg font-black">{payload[0].value} contracts</p>
+                                                        <p className="text-sm text-rose-500 font-bold">₹{Number(payload[0].payload.revenue).toLocaleString('en-IN')}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Bar dataKey="count" radius={[0, 10, 10, 0]} animationDuration={1500}>
+                                        {topVendors.map((_: any, idx: number) => (
+                                            <Cell key={idx} fill={VENDOR_COLORS[idx % VENDOR_COLORS.length]} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+                </div>
+
+                {/* Recent Contracts */}
+                <div className="bg-card border rounded-[1.5rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-sm">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8">
+                        <div className="p-2 sm:p-3 bg-blue-500/10 rounded-xl sm:rounded-2xl text-blue-500">
+                            <Clock size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-xl sm:text-2xl font-black tracking-tight">Recent Contracts</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground font-medium">Latest 5 platform-wide.</p>
+                        </div>
+                    </div>
+
+                    {recentContracts.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center text-center py-12 bg-secondary/20 rounded-3xl border-2 border-dashed">
+                            <AlertCircle size={36} className="text-muted-foreground/40 mb-3" />
+                            <p className="text-muted-foreground font-bold">No contracts created yet.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {recentContracts.map((contract: any, idx: number) => (
+                                <motion.div
+                                    key={contract.short_id}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: idx * 0.08 }}
+                                    className="flex items-center gap-4 p-4 rounded-2xl bg-secondary/30 border border-border/50 hover:bg-secondary/50 transition-colors"
+                                >
+                                    <div className="w-10 h-10 bg-rose-500/10 text-rose-500 rounded-xl flex items-center justify-center shrink-0 font-black text-sm">
+                                        {(contract.customer?.full_name || 'C').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm truncate">{contract.customer?.full_name || 'Customer'}</p>
+                                        <p className="text-xs text-muted-foreground truncate">{contract.products?.name || 'Product'} • {contract.shops?.name || 'Shop'}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <p className="font-black text-sm">₹{Math.ceil(Number(contract.emi_amount)).toLocaleString('en-IN')}<span className="text-[10px] text-muted-foreground font-medium">/mo</span></p>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColor(contract.status)}`}>
+                                            {contract.status?.toUpperCase()}
+                                        </span>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Bottom Insight */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
+                <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center text-rose-400 shadow-inner backdrop-blur-md">
+                        <TrendingUp size={32} />
+                    </div>
+                    <div>
+                        <h4 className="text-xl font-black mb-1">Platform Collection Rate: <span className="text-rose-400">{Math.round((totalCollected / (data.totalGMV || 1)) * 100)}%</span></h4>
+                        <p className="text-slate-400 text-sm font-medium">Monitor repayment health across all vendors.</p>
+                    </div>
+                </div>
+                <Button className="bg-rose-500 hover:bg-rose-600 text-white rounded-xl px-10 h-14 font-black text-lg shadow-xl shadow-rose-500/20">Full Report →</Button>
+            </motion.div>
         </motion.div>
     );
 }

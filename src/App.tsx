@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Store, ShoppingBag, LayoutDashboard, Search, Menu, X, User, Bell, MessageSquare } from 'lucide-react';
+import { Store, ShoppingBag, LayoutDashboard, Search, Menu, X, User, Bell, MessageSquare, ShoppingCart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import Home from './pages/Home';
@@ -24,6 +24,8 @@ import { Toaster } from 'sonner';
 import './index.css';
 
 import NotificationPopover from './components/NotificationPopover';
+import CartDrawer from './components/CartDrawer';
+import { useCartStore } from './store/cartStore';
 
 function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
@@ -46,6 +48,12 @@ function Navbar() {
         const { data } = await supabase.rpc('get_user_chat_profiles', { p_user_ids: [user.id] });
         if (data?.[0]?.avatar_url) {
             setCurrentAvatar(data[0].avatar_url);
+        } else {
+            // Fallback: check users table directly (for admin profiles)
+            const { data: userData } = await supabase.from('users').select('avatar_url').eq('id', user.id).single();
+            if (userData?.avatar_url) {
+                setCurrentAvatar(userData.avatar_url);
+            }
         }
     };
     fetchUserData();
@@ -365,6 +373,37 @@ function AnimatedRoutes() {
   );
 }
 
+function CartFAB() {
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const cartItems = useCartStore((s) => s.items);
+  const location = useLocation();
+
+  // Hide on vendor and admin pages
+  const hiddenPaths = ['/vendor', '/admin'];
+  if (hiddenPaths.some(p => location.pathname.startsWith(p))) return null;
+
+  return (
+    <>
+      {cartItems.length > 0 && (
+        <motion.button
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setDrawerOpen(true)}
+          className="fixed bottom-6 right-6 z-50 w-16 h-16 bg-accent text-white rounded-full shadow-2xl shadow-accent/30 flex items-center justify-center"
+        >
+          <ShoppingCart size={26} />
+          <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-xs font-black rounded-full flex items-center justify-center ring-2 ring-background">
+            {cartItems.length}
+          </span>
+        </motion.button>
+      )}
+      <CartDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+    </>
+  );
+}
+
 function App() {
   return (
     <ThemeProvider>
@@ -374,6 +413,7 @@ function App() {
           <main className="flex-1 w-full mx-auto pb-12 overflow-x-hidden">
             <AnimatedRoutes />
           </main>
+          <CartFAB />
           <Toaster richColors position="top-right" />
         </div>
       </Router>

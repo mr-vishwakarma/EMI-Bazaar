@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Store, Box, Activity, CreditCard, LayoutDashboard, Settings, ShieldAlert } from 'lucide-react';
+import { Store, Box, Activity, CreditCard, LayoutDashboard, Settings, ShieldAlert, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
@@ -12,6 +12,7 @@ import AdminProductsTab from './tabs/AdminProductsTab';
 import AdminEmiTab from './tabs/AdminEmiTab';
 import AdminPaymentsTab from './tabs/AdminPaymentsTab';
 import AdminPlatformTab from './tabs/AdminPlatformTab';
+import AdminProfileTab from './tabs/AdminProfileTab';
 
 const PAGE_SIZE = 10;
 
@@ -22,6 +23,7 @@ const SIDEBAR_TABS = [
     { id: 'emi',       icon: Activity,        label: 'EMI & Fraud Tracker'},
     { id: 'payments',  icon: CreditCard,      label: 'Payment Gateway'    },
     { id: 'platform',  icon: Settings,        label: 'Platform Settings'  },
+    { id: 'profile',   icon: User,            label: 'Admin Profile'      },
 ];
 
 export default function AdminDashboard() {
@@ -188,6 +190,7 @@ export default function AdminDashboard() {
                     {activeTab === 'emi'      && <AdminEmiTab />}
                     {activeTab === 'payments' && <AdminPaymentsTab />}
                     {activeTab === 'platform' && <AdminPlatformTab />}
+                    {activeTab === 'profile'  && <AdminProfileTab />}
                 </AnimatePresence>
             </div>
 

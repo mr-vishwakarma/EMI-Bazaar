@@ -41,7 +41,7 @@ export default function VendorDashboard() {
 
             const { data: profileData } = await supabase
                 .from('vendor_profiles')
-                .select('business_name, category, address, gstin, pan, aadhaar, account_no, ifsc, document_urls')
+                .select('business_name, category, address, gstin, pan, aadhaar, account_no, ifsc, document_urls, phone, email, upi_id, profile_photo_url')
                 .eq('user_id', authUser.id).single();
 
             setVendorProfile(profileData || null);
@@ -409,7 +409,7 @@ export default function VendorDashboard() {
                     )}
                     {activeTab === 'customers'    && <CustomersTab mockCustomers={mockCustomers} />}
                     {activeTab === 'terms'        && <TermsTab />}
-                    {activeTab === 'registration' && <ShopProfileTab vendorProfile={vendorProfile} />}
+                    {activeTab === 'registration' && <ShopProfileTab vendorProfile={vendorProfile} onProfileUpdated={setVendorProfile} />}
                 </AnimatePresence>
             </div>
 

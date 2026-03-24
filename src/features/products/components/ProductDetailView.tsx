@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, MapPin, Calculator, Store, Zap, CreditCard, MessageSquare } from 'lucide-react';
+import { ShieldCheck, MapPin, Calculator, Store, Zap, CreditCard, MessageSquare, ShoppingCart } from 'lucide-react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { products as mockProducts, getEmiPlans } from '../../../data/mockData';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,6 +7,10 @@ import { Button } from '../../../components/ui/button';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { supabase } from '../../../lib/supabase';
 import { productsApi } from '../api/productsApi';
+import { useCartStore } from '../../../store/cartStore';
+import { toast } from 'sonner';
+import ProductReviews from './ProductReviews';
+import type { ProductRating } from '../api/reviewsApi';
 
 export default function ProductDetail() {
     const { id } = useParams();
@@ -14,6 +18,7 @@ export default function ProductDetail() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedPlan, setSelectedPlan] = useState(0);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
+    const [productRating, setProductRating] = useState<ProductRating>({ avgRating: 0, reviewCount: 0 });
     const navigate = useNavigate();
 
     const handleContactVendor = async () => {
@@ -198,8 +203,8 @@ export default function ProductDetail() {
                             className="flex items-center gap-4"
                         >
                             <div className="flex items-center gap-2 bg-secondary/80 px-3 py-1.5 rounded-lg border border-border/50">
-                                <span className="text-sm font-bold">★ {product.rating}</span>
-                                <span className="text-muted-foreground text-sm font-medium">| 240+ Verified</span>
+                                <span className="text-sm font-bold">★ {productRating.avgRating || '—'}</span>
+                                <span className="text-muted-foreground text-sm font-medium">| {productRating.reviewCount} Review{productRating.reviewCount !== 1 ? 's' : ''}</span>
                             </div>
                         </motion.div>
                     </div>
@@ -297,6 +302,23 @@ export default function ProductDetail() {
                                 <CreditCard size={20} className="mr-2" /> Buy on EMI
                             </Button>
                         </Link>
+                        <Button
+                            onClick={() => {
+                                useCartStore.getState().addItem({
+                                    productId: product.id,
+                                    name: product.name,
+                                    image: product.image,
+                                    price: product.price,
+                                    shopName: product.shopName,
+                                    shopId: product.shopId,
+                                    selectedPlanIndex: selectedPlan,
+                                });
+                                toast.success('Added to cart!', { description: product.name });
+                            }}
+                            variant="outline" size="lg" className="h-14 rounded-xl border-2 hover:bg-secondary px-5"
+                        >
+                            <ShoppingCart size={20} />
+                        </Button>
                         <Button 
                             onClick={handleContactVendor}
                             variant="outline" size="lg" className="flex-1 text-lg h-14 rounded-xl border-2 hover:bg-secondary">
@@ -309,6 +331,9 @@ export default function ProductDetail() {
                         <span className="flex items-center gap-2"><ShieldCheck size={18} className="text-green-500" /> 7-Day Replacement</span>
                         <span className="flex items-center gap-2"><ShieldCheck size={18} className="text-green-500" /> 1 Year Warranty</span>
                     </div>
+
+                    {/* Product Reviews */}
+                    <ProductReviews productId={product.id} onRatingLoaded={setProductRating} />
 
                 </div>
             </div>

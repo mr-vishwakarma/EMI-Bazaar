@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Check, CheckCircle2, Smartphone, ChevronRight, Search, ShieldCheck,
     ShieldAlert, FileText, User, AlertCircle, CreditCard, Package,
-    Loader2, RefreshCw, KeyRound, QrCode
+    Loader2, RefreshCw, KeyRound, QrCode, Printer
 } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
 import { supabase } from '../../../../lib/supabase';
 import { toast } from 'sonner';
+import { generateContractInvoice } from '../../../../utils/generateReceipt';
 
 interface PosTabProps {
     posStep: number; setPosStep: (step: number) => void;
@@ -549,13 +550,37 @@ export default function PosTab(_props: PosTabProps) {
                                             .map(([l, v]) => <div key={l} className="flex justify-between text-sm"><span className="text-muted-foreground">{l}</span><span className="font-bold">{v}</span></div>)}
                                     </div>
                                     
+                                    <div className="w-full mb-4">
+                                        <Button
+                                            onClick={() => {
+                                                generateContractInvoice({
+                                                    contractId: createdContract.short_id,
+                                                    date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+                                                    customerName: customer?.full_name || phone,
+                                                    customerPhone: customer?.phone || phone,
+                                                    productName: product?.name,
+                                                    productPrice: product?.price || 0,
+                                                    downPayment: createdContract.down_payment || 0,
+                                                    principalAmount: createdContract.principal_amount || 0,
+                                                    totalAmount: createdContract.total_amount || 0,
+                                                    emiAmount: createdContract.emi_amount || 0,
+                                                    duration: `${createdContract.duration_count} ${createdContract.duration_type === 'monthly' ? 'months' : 'weeks'}`,
+                                                    nextDueDate: new Date(createdContract.next_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                                                });
+                                            }}
+                                            variant="outline"
+                                            className="w-full h-14 rounded-2xl font-bold border-2 border-accent text-accent hover:bg-accent/10 gap-2 mb-2 bg-accent/5 shadow-sm"
+                                        >
+                                            <Printer size={20} className="mr-1" /> View & Print Detailed Invoice
+                                        </Button>
+                                    </div>
                                     <div className="w-full flex flex-col md:flex-row gap-4">
                                         <Button onClick={reset} variant="outline" className="flex-1 h-14 rounded-2xl font-bold border-2 gap-2">
                                             <RefreshCw size={18} /> New Session
                                         </Button>
                                         <Button onClick={handleGenerateAutoPay} variant="accent" className="flex-[2] h-14 rounded-2xl font-bold shadow-xl shadow-accent/20 gap-2" disabled={isGeneratingAutoPay}>
                                             {isGeneratingAutoPay ? <Loader2 size={24} className="animate-spin" /> : <QrCode size={24} />}
-                                            {isGeneratingAutoPay ? 'Generating Link...' : 'Generate AutoPay QR Setup'}
+                                            {isGeneratingAutoPay ? 'Generating Link...' : 'Setup AutoPay QR'}
                                         </Button>
                                     </div>
                                 </>
