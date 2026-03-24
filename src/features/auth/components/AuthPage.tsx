@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Store, Phone, ShieldCheck, ArrowRight, MessageSquare, Building2, ShieldAlert } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
@@ -13,18 +13,18 @@ export default function Auth() {
 
     // Customer Auth State
     const [customerMode, setCustomerMode] = useState<'login' | 'signup'>('login');
-    const [customerEmail, setCustomerEmail] = useState('');
-    const [customerPassword, setCustomerPassword] = useState('');
-    const [customerConfirmPassword, setCustomerConfirmPassword] = useState('');
+    const customerEmailRef = useRef<HTMLInputElement>(null);
+    const customerPasswordRef = useRef<HTMLInputElement>(null);
+    const customerConfirmPasswordRef = useRef<HTMLInputElement>(null);
     
     // Shared Verification State
     const [showVerifyOTP, setShowVerifyOTP] = useState(false);
     const [verifyEmail, setVerifyEmail] = useState('');
-    const [otpToken, setOtpToken] = useState('');
+    const otpTokenRef = useRef<HTMLInputElement>(null);
 
     // Business Login State (Vendor/Admin)
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const emailRef = useRef<HTMLInputElement>(null);
+    const passwordRef = useRef<HTMLInputElement>(null);
 
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
@@ -32,24 +32,78 @@ export default function Auth() {
 
     // Vendor mode: 'login' or 'signup'
     const [vendorMode, setVendorMode] = useState<'login' | 'signup'>('login');
-    const [confirmPassword, setConfirmPassword] = useState('');
+    const confirmPasswordRef = useRef<HTMLInputElement>(null);
+
+    // --- Secure Login Helper ---
+    const verifyAndCompleteLogin = async (session: any, expectedRole: string) => {
+        try {
+            // Check the authoritative database users table instead of trusting user_metadata
+            const { data: dbUser, error } = await supabase
+                .from('users')
+                .select('role, full_name')
+                .eq('id', session.user.id)
+                .single();
+
+            if (error || !dbUser) {
+                toast.error('Could not verify account privileges.');
+                await supabase.auth.signOut();
+                setLoading(false);
+                return;
+            }
+
+            if (dbUser.role !== expectedRole) {
+                toast.error(`Unauthorized: You do not have ${expectedRole} privileges.`);
+                await supabase.auth.signOut();
+                setLoading(false);
+                return;
+            }
+
+            login({
+                id: session.user.id,
+                email: session.user.email,
+                name: dbUser.full_name || (expectedRole === 'customer' ? 'Customer' : 'Vendor'),
+                role: dbUser.role as any,
+                shopId: dbUser.role === 'vendor' ? 'shop_live_123' : undefined // Mock for now
+            });
+
+            if (dbUser.role === 'admin') {
+                toast.success('Welcome back, Admin!');
+                navigate('/admin');
+            } else if (dbUser.role === 'vendor') {
+                toast.success('Welcome to your Vendor Hub!');
+                navigate('/vendor');
+            } else {
+                toast.success('Welcome back! 🎉');
+                navigate('/');
+            }
+        } catch (err) {
+            toast.error('An error occurred during verification.');
+            await supabase.auth.signOut();
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // --- Customer Sign Up / Login Flow (Email & Password) ---
     const handleCustomerSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (customerPassword !== customerConfirmPassword) {
+        const email = customerEmailRef.current?.value || '';
+        const password = customerPasswordRef.current?.value || '';
+        const confirmPassword = customerConfirmPasswordRef.current?.value || '';
+
+        if (password !== confirmPassword) {
             toast.error('Passwords do not match!');
             return;
         }
-        if (customerPassword.length < 8) {
+        if (password.length < 8) {
             toast.error('Password must be at least 8 characters.');
             return;
         }
         setLoading(true);
 
         const { data, error } = await supabase.auth.signUp({
-            email: customerEmail,
-            password: customerPassword,
+            email: email,
+            password: password,
             options: { data: { role: 'customer' } }
         });
 
@@ -66,44 +120,42 @@ export default function Auth() {
             toast.success('Welcome to EMI Bazaar! 🎉');
             navigate('/');
         } else if (data.user) {
-             // Supabase Email Confirmation is ON
              toast.success('OTP sent! Please check your email for the 8-digit code.');
-             setVerifyEmail(customerEmail);
+             setVerifyEmail(email);
              setShowVerifyOTP(true);
         }
     };
 
     const handleCustomerLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        const email = customerEmailRef.current?.value || '';
+        const password = customerPasswordRef.current?.value || '';
+
         setLoading(true);
 
         const { data, error } = await supabase.auth.signInWithPassword({
-            email: customerEmail,
-            password: customerPassword
+            email,
+            password
         });
-
-        setLoading(false);
 
         if (error) {
             toast.error('Login Failed: ' + error.message);
+            setLoading(false);
             return;
         }
 
         if (data.session) {
-            login({
-                id: data.session.user.id,
-                email: data.session.user.email,
-                name: data.session.user.user_metadata?.full_name || 'Customer',
-                role: 'customer'
-            });
-            toast.success('Welcome back! 🎉');
-            navigate('/');
+            await verifyAndCompleteLogin(data.session, 'customer');
+        } else {
+            setLoading(false);
         }
     };
 
     // --- Verify OTP Flow (6-digit token from Supabase Email) ---
     const handleVerifyUserOTP = async (e: React.FormEvent, targetRole: 'customer' | 'vendor') => {
         e.preventDefault();
+        const otpToken = otpTokenRef.current?.value || '';
+
         setLoading(true);
 
         const { data, error } = await supabase.auth.verifyOtp({
@@ -136,6 +188,10 @@ export default function Auth() {
     // --- Vendor Sign Up Flow ---
     const handleVendorSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
+        const email = emailRef.current?.value || '';
+        const password = passwordRef.current?.value || '';
+        const confirmPassword = confirmPasswordRef.current?.value || '';
+
         if (password !== confirmPassword) {
             toast.error('Passwords do not match!');
             return;
@@ -174,6 +230,9 @@ export default function Auth() {
     // --- Business Login Flow (Vendor/Admin) ---
     const handleBusinessLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        const email = emailRef.current?.value || '';
+        const password = passwordRef.current?.value || '';
+
         setLoading(true);
 
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -181,33 +240,17 @@ export default function Auth() {
             password
         });
 
-        setLoading(false);
-
         if (error) {
             toast.error('Login Failed: ' + error.message);
+            setLoading(false);
             return;
         }
 
         if (data.session) {
-            // Note: In a full app, you might query the 'users' table to double check the exact role and shopId.
-            // For now, we rely on the metadata OR assume based on the tab clicked.
-            const userRole = data.session.user.user_metadata?.role || loginMode;
-
-            login({
-                id: data.session.user.id,
-                email: data.session.user.email,
-                name: data.session.user.user_metadata?.full_name || 'System User',
-                role: userRole,
-                shopId: userRole === 'vendor' ? 'shop_live_123' : undefined // Mock shop mapping until setup
-            });
-
-            if (userRole === 'admin') {
-                toast.success('Welcome back, Admin!');
-                navigate('/admin');
-            } else {
-                toast.success('Welcome to your Vendor Hub!');
-                navigate('/vendor');
-            }
+            // Verify via database instead of trusting metadata
+            await verifyAndCompleteLogin(data.session, loginMode);
+        } else {
+            setLoading(false);
         }
     };
 
@@ -297,15 +340,14 @@ export default function Auth() {
 
                                         <form onSubmit={(e) => handleVerifyUserOTP(e, 'customer')} className="space-y-6">
                                             <input
+                                                ref={otpTokenRef}
                                                 type="text"
                                                 placeholder="Enter 8-Digit Code"
-                                                value={otpToken}
-                                                onChange={(e) => setOtpToken(e.target.value)}
                                                 required
                                                 maxLength={8}
                                                 className="w-full bg-secondary/50 border border-border focus:border-accent/50 focus:bg-background rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] font-black outline-none transition-all shadow-sm"
                                             />
-                                            <Button type="submit" variant="accent" disabled={loading || otpToken.length < 8} className="w-full rounded-xl py-6 text-base font-bold shadow-lg shadow-accent/20">
+                                            <Button type="submit" variant="accent" disabled={loading} className="w-full rounded-xl py-6 text-base font-bold shadow-lg shadow-accent/20">
                                                 {loading ? 'Verifying...' : 'Verify Email & Enter'}
                                             </Button>
                                             
@@ -323,22 +365,20 @@ export default function Auth() {
 
                                         <form onSubmit={handleCustomerLogin} className="space-y-4">
                                             <input
+                                                ref={customerEmailRef}
                                                 type="email"
                                                 placeholder="Enter Your Email"
-                                                value={customerEmail}
-                                                onChange={(e) => setCustomerEmail(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-accent/50 focus:bg-background rounded-xl px-4 py-4 text-base font-medium outline-none transition-all duration-300 tracking-wider"
                                             />
                                             <input
+                                                ref={customerPasswordRef}
                                                 type="password"
                                                 placeholder="Password"
-                                                value={customerPassword}
-                                                onChange={(e) => setCustomerPassword(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-accent/50 focus:bg-background rounded-xl px-4 py-4 text-base font-medium outline-none transition-all duration-300 tracking-wider"
                                             />
-                                            <Button type="submit" variant="accent" disabled={loading || !customerEmail.includes('@') || !customerPassword} className="w-full rounded-xl py-6 text-base font-bold shadow-lg shadow-accent/20 flex items-center justify-center gap-2 group mt-2">
+                                            <Button type="submit" variant="accent" disabled={loading} className="w-full rounded-xl py-6 text-base font-bold shadow-lg shadow-accent/20 flex items-center justify-center gap-2 group mt-2">
                                                 {loading ? 'Logging in...' : 'Sign In'}
                                                 {!loading && <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />}
                                             </Button>
@@ -351,31 +391,28 @@ export default function Auth() {
 
                                         <form onSubmit={handleCustomerSignUp} className="space-y-4">
                                             <input
+                                                ref={customerEmailRef}
                                                 type="email"
                                                 placeholder="Email Address"
-                                                value={customerEmail}
-                                                onChange={(e) => setCustomerEmail(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-accent/50 focus:bg-background rounded-xl px-4 py-3.5 text-base font-medium outline-none transition-all duration-300 tracking-wider"
                                             />
                                             <input
+                                                ref={customerPasswordRef}
                                                 type="password"
                                                 placeholder="Create Password (min. 8 chars)"
-                                                value={customerPassword}
-                                                onChange={(e) => setCustomerPassword(e.target.value)}
                                                 required
                                                 minLength={8}
                                                 className="w-full bg-secondary/50 border border-border focus:border-accent/50 focus:bg-background rounded-xl px-4 py-3.5 text-base font-medium outline-none transition-all duration-300 tracking-wider"
                                             />
                                             <input
+                                                ref={customerConfirmPasswordRef}
                                                 type="password"
                                                 placeholder="Confirm Password"
-                                                value={customerConfirmPassword}
-                                                onChange={(e) => setCustomerConfirmPassword(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-accent/50 focus:bg-background rounded-xl px-4 py-3.5 text-base font-medium outline-none transition-all duration-300 tracking-wider"
                                             />
-                                            <Button type="submit" variant="accent" disabled={loading || !customerEmail || !customerPassword || !customerConfirmPassword} className="w-full rounded-xl py-6 text-base font-bold shadow-lg shadow-accent/20 flex items-center justify-center gap-2 group mt-2">
+                                            <Button type="submit" variant="accent" disabled={loading} className="w-full rounded-xl py-6 text-base font-bold shadow-lg shadow-accent/20 flex items-center justify-center gap-2 group mt-2">
                                                 {loading ? 'Creating Account...' : 'Sign Up'}
                                             </Button>
                                         </form>
@@ -422,15 +459,14 @@ export default function Auth() {
 
                                         <form onSubmit={(e) => handleVerifyUserOTP(e, 'vendor')} className="space-y-6">
                                             <input
+                                                ref={otpTokenRef}
                                                 type="text"
                                                 placeholder="Enter 8-Digit Code"
-                                                value={otpToken}
-                                                onChange={(e) => setOtpToken(e.target.value)}
                                                 required
                                                 maxLength={8}
                                                 className="w-full bg-secondary/50 border border-border focus:border-blue-500 focus:bg-background rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] font-black outline-none transition-all shadow-sm"
                                             />
-                                            <Button type="submit" disabled={loading || otpToken.length < 8} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-blue-600 hover:bg-blue-700 shadow-blue-500/20">
+                                            <Button type="submit" disabled={loading} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-blue-600 hover:bg-blue-700 shadow-blue-500/20">
                                                 {loading ? 'Verifying...' : 'Verify Store Account'}
                                             </Button>
                                             
@@ -448,22 +484,20 @@ export default function Auth() {
 
                                         <form onSubmit={handleBusinessLogin} className="space-y-4">
                                             <input
+                                                ref={emailRef}
                                                 type="email"
                                                 placeholder="Work Email Address"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-blue-500 focus:bg-background rounded-xl px-4 py-4 text-base font-medium outline-none transition-all shadow-sm"
                                             />
                                             <input
+                                                ref={passwordRef}
                                                 type="password"
                                                 placeholder="Password"
-                                                value={password}
-                                                onChange={(e) => setPassword(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-blue-500 focus:bg-background rounded-xl px-4 py-4 text-base font-medium outline-none transition-all shadow-sm"
                                             />
-                                            <Button type="submit" disabled={loading || !email || !password} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-blue-600 hover:bg-blue-700 shadow-blue-500/20">
+                                            <Button type="submit" disabled={loading} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-blue-600 hover:bg-blue-700 shadow-blue-500/20">
                                                 {loading ? 'Signing in...' : 'Sign In'}
                                             </Button>
                                         </form>
@@ -479,31 +513,28 @@ export default function Auth() {
 
                                         <form onSubmit={handleVendorSignUp} className="space-y-4">
                                             <input
+                                                ref={emailRef}
                                                 type="email"
                                                 placeholder="Business Email Address"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-blue-500 focus:bg-background rounded-xl px-4 py-3.5 text-base font-medium outline-none transition-all shadow-sm"
                                             />
                                             <input
+                                                ref={passwordRef}
                                                 type="password"
                                                 placeholder="Create Password (min. 8 chars)"
-                                                value={password}
-                                                onChange={(e) => setPassword(e.target.value)}
                                                 required
                                                 minLength={8}
                                                 className="w-full bg-secondary/50 border border-border focus:border-blue-500 focus:bg-background rounded-xl px-4 py-3.5 text-base font-medium outline-none transition-all shadow-sm"
                                             />
                                             <input
+                                                ref={confirmPasswordRef}
                                                 type="password"
                                                 placeholder="Confirm Password"
-                                                value={confirmPassword}
-                                                onChange={(e) => setConfirmPassword(e.target.value)}
                                                 required
                                                 className="w-full bg-secondary/50 border border-border focus:border-blue-500 focus:bg-background rounded-xl px-4 py-3.5 text-base font-medium outline-none transition-all shadow-sm"
                                             />
-                                            <Button type="submit" disabled={loading || !email || !password || !confirmPassword} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-blue-600 hover:bg-blue-700 shadow-blue-500/20 flex items-center justify-center gap-2">
+                                            <Button type="submit" disabled={loading} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-blue-600 hover:bg-blue-700 shadow-blue-500/20 flex items-center justify-center gap-2">
                                                 {loading ? 'Creating Account...' : 'Create Account & Continue →'}
                                             </Button>
                                         </form>
@@ -525,22 +556,20 @@ export default function Auth() {
 
                                 <form onSubmit={handleBusinessLogin} className="space-y-6">
                                     <input
+                                        ref={emailRef}
                                         type="email"
                                         placeholder="Admin Email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
                                         required
                                         className="w-full bg-secondary/50 border border-border focus:border-rose-500 focus:bg-background rounded-xl px-4 py-4 text-base font-medium outline-none transition-all shadow-sm"
                                     />
                                     <input
+                                        ref={passwordRef}
                                         type="password"
                                         placeholder="Secure Password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
                                         required
                                         className="w-full bg-secondary/50 border border-border focus:border-rose-500 focus:bg-background rounded-xl px-4 py-4 text-base font-medium outline-none transition-all shadow-sm"
                                     />
-                                    <Button type="submit" disabled={loading || !email || !password} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-rose-600 hover:bg-rose-700 shadow-rose-500/20">
+                                    <Button type="submit" disabled={loading} className="w-full rounded-xl py-6 text-base font-bold shadow-lg text-white bg-rose-600 hover:bg-rose-700 shadow-rose-500/20">
                                         {loading ? 'Authenticating...' : 'Secure Sign In'}
                                     </Button>
                                 </form>
