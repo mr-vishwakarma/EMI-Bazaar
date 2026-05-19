@@ -1,73 +1,125 @@
-# React + TypeScript + Vite
+# EMI Bazaar - The Smart EMI E-Commerce & POS Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+![Live Demo](https://img.shields.io/badge/Live_Demo-emi--bazaar.vercel.app-blue?style=for-the-badge)
+![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 
-Currently, two official plugins are available:
+EMI Bazaar is a comprehensive, multi-role e-commerce and Point of Sale (POS) platform. Its core differentiating feature is the deep integration of **Equated Monthly Installments (EMI)** as a native payment, tracking, and repurchasing mechanism.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+🌐 **Live Website:** [https://emi-bazaar.vercel.app/](https://emi-bazaar.vercel.app/)
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 👥 User Roles & Personas
 
-## Expanding the ESLint configuration
+The application serves three distinct user roles, each with a custom-tailored interface and permission set:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. **Customers**
+   * Browse products and view dedicated shop profiles.
+   * Add items to a shopping cart and initiate an online checkout with dynamic EMI plans.
+   * Track personal EMI repayment ledgers.
+   * Chat in real-time with vendors.
+2. **Vendors (Sellers)**
+   * Access a dedicated **"Vendor Hub"**.
+   * Onboard and set up a shop presence.
+   * Manage inventory and track sales analytics.
+   * **Crucial Feature:** Operate a **Point of Sale (POS)** system that allows walk-in customer lookups via phone/OTP, and generate formal EMI contracts on the spot.
+   * Chat with potential or existing customers.
+3. **Administrators**
+   * Access the **"Admin Center"**.
+   * Oversee the entire ecosystem.
+   * Approve or reject vendor onboarding applications.
+   * Access high-level, platform-wide metrics and analytics.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## ⚡ Core Features
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+* **Advanced POS for EMI:** A robust Point of Sale flow empowering vendors to select product terms, input down payments, calculate interest, and legally bind an EMI contract for walk-in customers.
+* **Real-time Engine:** Instant chat messaging between users and live push notifications powered by Supabase Realtime channels.
+* **Multi-Tier Authentication:** Secure, role-based routing and database-level Row Level Security (RLS) ensuring that users only access what they are permitted to.
+* **Shopping Cart & Checkout:** A seamless sliding UI cart managed via Zustand state, connecting to Razorpay for secure initial down-payments and mandate setup.
+* **Analytics Overviews:** Deep data visualizations for both vendors and admins using Recharts.
+* **Dynamic, Responsive UI:** Fluid micro-animations with Framer Motion, utilizing accessible Radix UI primitives and a fully functional Dark/Light theme toggle.
+
+---
+
+## 🛠️ Tech Stack
+
+* **Frontend Framework:** React 19 + TypeScript + Vite
+* **Routing:** React Router DOM (v7)
+* **Styling & Components:** Tailwind CSS (3.4), Radix UI, Framer Motion, Lucide React
+* **State Management:** Zustand
+* **Backend as a Service:** Supabase (PostgreSQL, Auth, Storage, Real-time Subscriptions, Edge Functions/RPCs)
+* **Payments:** Razorpay
+* **Data Visualization:** Recharts
+
+---
+
+## 📁 Architecture Overview
+
+Following a structured, domain-driven design approach:
+
+```text
+src/
+├── features/        # Modular domains isolating logic (admin, auth, customer, products, shop, vendor)
+├── pages/           # Top-level routing components mapping to URLs
+├── components/      # Reusable UI elements (CartDrawer, NotificationPopover, ui/)
+├── store/           # Zustand global state (cartStore, themeStore)
+├── hooks/           # Custom React hooks (e.g., useRazorpay)
+├── utils/           # Helper functions (e.g., generateReceipt for client-side receipt building)
+└── lib/             # Third-party client initializations (e.g., Supabase)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Supabase Backend Engine
+The backend architecture is heavily database-driven, relying on PostgreSQL constraints, Remote Procedure Calls (RPCs), and Row Level Security (RLS) policies.
+The `supabase/queries/` directory acts as an evolutionary schema comprised of **30 detailed SQL migrations**, handling:
+* Vendor lifecycle (Pending -> Approved -> Rejected).
+* EMI Plan config and tracking formal legal state, principal, and terms.
+* Backend RPCs allowing vendors to securely query customer information during a POS session.
+* Ledger tracking for actual installment completions.
+* Push-heavy operations like aggregated calculations and checkout transaction closures offloaded entirely to the database engine.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 🚀 Setup & Installation
+
+To run this project locally:
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/mr-vishwakarma/EMI-Bazaar.git
+   cd EMI-Bazaar
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Environment Variables**
+   Create a `.env.local` file in the root directory and add your Supabase and Razorpay credentials:
+   ```env
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   VITE_RAZORPAY_KEY_ID=your_razorpay_key
+   ```
+
+4. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+
+## 📸 Screenshots
+
+*(Add project screenshots here)*
+
+* **Desktop Home:** `![Home](/path/to/home.png)`
+* **Vendor POS:** `![POS](/path/to/pos.png)`
+* **Admin Dashboard:** `![Admin](/path/to/admin.png)`
+
+---
+
+*Designed and Built for modern commerce.*
